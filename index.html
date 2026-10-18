@@ -1,0 +1,104 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Titanomachy: The First Spark</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+body{background:#000;overflow:hidden;font:14px Inter,sans-serif;color:#eee;user-select:none}
+canvas{display:block}
+h1,h2,b,.cin{font-family:Cinzel,serif;letter-spacing:.08em}
+.ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:30;text-align:center}
+button{font:600 14px Inter;color:#f3e6c8;background:linear-gradient(#2a2216cc,#120e08ee);border:1px solid #c9a24a88;padding:12px 22px;margin:6px;cursor:pointer;border-radius:3px;transition:.15s}
+button:hover{border-color:#ffd77a;box-shadow:0 0 18px #ffb43a55;transform:translateY(-1px)}
+#hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:10}
+#bars{position:absolute;left:28px;bottom:28px;width:min(320px,60vw)}
+.bar{height:9px;background:#0009;border:1px solid #ffffff22;margin-top:6px;overflow:hidden;border-radius:2px}
+.bar i{display:block;height:100%;width:100%;transition:width .12s}
+#hp{background:linear-gradient(90deg,#7a0d1c,#ff3d55)}#st{background:linear-gradient(90deg,#7a6a10,#f2d24a)}#sp{background:linear-gradient(90deg,#0d4a7a,#5fd0ff)}
+#info{font-size:12px;color:#d8c9a8;margin-top:8px;text-shadow:0 1px 3px #000}
+#keys{position:absolute;right:24px;bottom:24px;font-size:12px;line-height:1.75;text-align:right;color:#e9dcc0;text-shadow:0 1px 3px #000}
+#keys kbd{display:inline-block;min-width:22px;padding:0 5px;border:1px solid #c9a24a99;border-radius:3px;background:#0008;font:600 11px Inter;text-align:center;margin-left:6px}
+#keys .off{opacity:.3}
+#obj{position:absolute;left:28px;top:24px;font:600 15px Cinzel;color:#ffe2a0;text-shadow:0 2px 6px #000;max-width:max(180px,calc(50vw - 260px))}
+#obj:before{content:'◆ ';color:#c9a24a}
+#boss{position:absolute;top:50px;left:50%;transform:translateX(-50%);width:min(560px,80vw);text-align:center;display:none}
+#boss b{font-size:16px;color:#ffd9a0;text-shadow:0 0 12px #f80}
+#boss .bar{height:12px;border-color:#c9a24a66}#bossHp{background:linear-gradient(90deg,#8a1010,#ff6a20)}
+#prompt{position:absolute;top:60%;left:50%;transform:translateX(-50%);font:600 15px Inter;color:#fff;text-shadow:0 2px 6px #000;display:flex;align-items:center;gap:10px}
+.kb{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border-radius:15px;border:2px solid #ffe2a0;background:#000a;font:700 13px Inter;color:#ffe2a0;box-shadow:0 0 12px #ffb43a66}
+#compass{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:min(440px,70vw);height:26px;border-bottom:1px solid #ffffff33;background:linear-gradient(90deg,#0000,#0006 20%,#0006 80%,#0000);overflow:hidden;font:700 12px Cinzel;color:#e9dcc0}
+#compass span{position:absolute;top:5px;transform:translateX(-50%);text-shadow:0 1px 3px #000}
+#compass .gm{color:#ffd060;font-size:15px;top:2px;text-shadow:0 0 8px #f90}#compass .gm small{font:600 10px Inter;margin-left:3px}
+#compass .rv{color:#7fe0ff;font-size:12px}
+#mtr{background:linear-gradient(90deg,#8a5a10,#ffd050)}#mtr.full{background:linear-gradient(90deg,#ffd050,#fff6c0);box-shadow:0 0 10px #ffd050}#xp{background:#a080ff}
+.bar.thin{height:4px}
+#pop{position:fixed;top:38%;width:100%;text-align:center;font:900 30px Cinzel;color:#bfe6ff;text-shadow:0 0 20px #39f,0 2px 6px #000;opacity:0;pointer-events:none;z-index:16}
+#pop.show{animation:pop .9s}@keyframes pop{0%{opacity:0;transform:scale(1.4)}20%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translateY(-20px)}}
+#cross{position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;border-radius:50%;background:#fff9;box-shadow:0 0 6px #fff}
+#gm{position:absolute;width:34px;height:34px;margin:-17px;border:2px solid #ffd060;border-radius:50%;box-shadow:0 0 14px #ffb020;display:none}
+#toasts{position:absolute;top:70px;left:28px;display:flex;flex-direction:column;gap:8px;max-width:440px}
+#toasts .t{font-size:13.5px;color:#f3ead8;text-shadow:0 1px 4px #000,0 0 10px #000;animation:tin .3s,tout .6s 5.4s forwards;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#toasts .t .kb{min-width:24px;height:24px;font-size:11px;border-width:1.5px}
+@keyframes tin{from{opacity:0;transform:translateX(-12px)}}@keyframes tout{to{opacity:0}}
+#dlg{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);width:min(880px,92vw);text-align:center;display:none;z-index:20;padding:26px 40px 10px;background:radial-gradient(ellipse at 50% 60%,#000a,#0000 70%)}
+#dlgS{display:block;color:#ffcf6a;font-size:13px;letter-spacing:.25em;text-transform:uppercase;text-shadow:0 2px 6px #000}
+#dlgT{margin-top:6px;font-size:20px;line-height:1.5;color:#fff;text-shadow:0 2px 4px #000,0 0 14px #000;animation:tin .25s}
+#dlg.narr #dlgT{font-style:italic;color:#e6dccb}#dlg small{display:flex;justify-content:center;align-items:center;gap:8px;color:#d8cfbf;margin-top:10px;font-size:12px;opacity:.85}
+#dlg small .kb{min-width:24px;height:24px;font-size:11px}
+#creator{display:none;justify-content:flex-start;align-items:flex-start;padding:24px 28px;overflow:auto;background:linear-gradient(90deg,#000d 0,#0009 36%,#0000 60%);text-align:left}
+#creator .pan{width:min(430px,92vw)}#creator h2{font-size:30px;color:#ffe2a6;margin-bottom:6px}
+#creator label{display:block;font:600 11px Inter;letter-spacing:.2em;text-transform:uppercase;color:#c9a24a;margin:14px 6px 2px}
+#creator input{font:600 16px Inter;padding:10px 12px;margin:6px;width:calc(100% - 12px);background:#0009;border:1px solid #c9a24a88;color:#fff;border-radius:3px}
+#creator button{padding:8px 13px;margin:4px}#creator button.on{border-color:#ffd77a;box-shadow:0 0 14px #ffb43a88;color:#fff}
+#creator .sw{width:34px;height:34px;padding:0;border-radius:50%}
+#creator .hs{display:block;width:calc(100% - 8px);text-align:left;border-left:4px solid var(--c)}#creator .hs b{display:block;color:#ffe2a6}#creator .hs span{font-weight:400;font-size:12px;color:#cfc3aa}
+#creator .go{width:calc(100% - 8px);font-size:17px;padding:14px;margin-top:12px;border-color:#ffd77a}
+#creator .orc{font-style:italic;color:#bfe6ff;margin:4px 6px;font-size:13px;min-height:18px}
+#modal{background:radial-gradient(#0008,#000d)}
+#modal h2{font-size:32px;color:#ffd890;text-shadow:0 0 20px #f805}
+#modal p{max-width:640px;margin:14px 20px 22px;line-height:1.6;color:#d9cdb5}
+#modal .opts{display:flex;flex-wrap:wrap;justify-content:center;max-width:980px}
+#modal .opts button{width:290px;text-align:left;padding:16px 18px;white-space:normal}
+#modal .opts button b{display:block;font-size:16px;color:#ffd890;margin-bottom:6px}
+#modal .opts button span{font-weight:400;font-size:13px;color:#cfc3aa;line-height:1.45}
+#card{position:fixed;top:30%;width:100%;text-align:center;opacity:0;z-index:15;pointer-events:none}
+#card small{font:600 13px Cinzel;letter-spacing:.4em;color:#c9a24a}#card h1{font-size:52px;color:#fff3d6;text-shadow:0 0 30px #f80a}
+#card.show{animation:card 4.5s}
+@keyframes card{0%{opacity:0;letter-spacing:.3em}15%,75%{opacity:1;letter-spacing:.08em}100%{opacity:0}}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .6s;z-index:25}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:24}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:9;box-shadow:inset 0 0 180px #000c;transition:box-shadow .2s}
+body.hurt #vig{box-shadow:inset 0 0 220px #c00c}
+body.miasma #vig{box-shadow:inset 0 0 200px #2a6a10cc}
+#menu{display:flex;background:radial-gradient(ellipse at center,#0000 0,#000a 70%)}
+#menu h1{font-size:clamp(36px,7vw,84px);font-weight:900;color:#ffe9b8;text-shadow:0 0 40px #ff9a2a88,0 4px 10px #000}
+#menu h3{font:500 18px Cinzel;letter-spacing:.5em;color:#c9a24a;margin:4px 0 30px}
+#menu .ctl{margin-top:26px;font-size:12px;color:#bba;line-height:1.8;max-width:560px}
+#hub{background:radial-gradient(ellipse,#0006,#000d);overflow:auto;padding:30px;justify-content:safe center}
+#hub h1{font-size:40px;color:#ffe2a6}#hub .st{margin:14px 0;color:#d9cdb5;line-height:1.8}
+#hub .grid{display:flex;flex-wrap:wrap;justify-content:center;max-width:900px}
+#hub .go{font-size:17px;padding:16px 34px;border-color:#ffd77a}
+#pause,#dead{background:#000a}#dead h1{font-size:54px;color:#e33;text-shadow:0 0 30px #f00}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head><body>
+<div id="vig"></div>
+<div id="hud">
+ <div id="obj"></div><div id="toasts"></div><div id="compass"></div>
+ <div id="boss"><b id="bossN"></b><div class="bar"><i id="bossHp"></i></div></div>
+ <div id="bars"><div class="bar"><i id="hp"></i></div><div class="bar"><i id="st"></i></div><div class="bar"><i id="sp"></i></div><div class="bar"><i id="mtr"></i></div><div class="bar thin"><i id="xp"></i></div><div id="info"></div></div>
+ <div id="keys"></div><div id="prompt"></div><div id="cross"></div><div id="gm"></div>
+</div>
+<div id="dlg"><b id="dlgS"></b><p id="dlgT"></p><small><span class="kb">Enter</span> Continue</small></div>
+<div id="modal" class="ov"></div>
+<div id="card"></div><div id="pop"></div><div id="creator" class="ov"></div><div id="fade"></div><div id="flash"></div>
+<div id="menu" class="ov">
+ <h1>TITANOMACHY</h1><h3>THE FIRST SPARK</h3>
+ <div><button id="newg">New Game</button><button id="cont">Continue</button><button id="cloud">Cloud Save</button></div>
+ <div class="ctl">WASD move · Mouse look · LMB light / RMB heavy attack · SHIFT sprint · SPACE jump · Q dodge / dash<br>C parry (on <span style="color:#ffd060">yellow</span> warnings) · F Spark Blast · G Grapple · T Spark Sight · R stance · E interact · X Primordial power (meter) · H potion · ESC pause</div>
+</div>
+<div id="hub" class="ov"></div>
+<div id="pause" class="ov"><h1>Paused</h1><p style="margin-top:12px">Click to resume</p></div>
+<div id="dead" class="ov"><h1>YOU HAVE FALLEN</h1><p style="margin:12px 0 20px">The Fates are not done with you.</p><button id="retry">Rise Again</button></div>
+<script type="module" src="game.js"></script>
+</body></html>
