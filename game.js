@@ -19,14 +19,14 @@ document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(60,1,.1,3000);
 const composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(1,1,{samples:4,type:THREE.HalfFloatType}));
 composer.addPass(new RenderPass(scene,camera));
-const bloom=new UnrealBloomPass(new THREE.Vector2(256,256),.7,.5,.9);composer.addPass(bloom);composer.addPass(new OutputPass());
+const bloom=new UnrealBloomPass(new THREE.Vector2(256,256),.45,.4,1.05);composer.addPass(bloom);composer.addPass(new OutputPass());
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)}
 addEventListener('resize',resize);resize();
 
 const hemi=new THREE.HemisphereLight(),sun=new THREE.DirectionalLight();scene.add(hemi,sun,sun.target);
 sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:220});
 sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-.0004;sun.shadow.normalBias=.04;
-const fill=new THREE.PointLight(0xfff0dc,30,20,1.3);scene.add(fill);const sky=new Sky();sky.scale.setScalar(2500);const skyScene=new THREE.Scene(),pmrem=new THREE.PMREMGenerator(renderer);let envRT;
+const fill=new THREE.PointLight(0xfff0dc,16,18,1.5);scene.add(fill);const sky=new Sky();sky.scale.setScalar(2500);const skyScene=new THREE.Scene(),pmrem=new THREE.PMREMGenerator(renderer);let envRT;
 
 // ================= procedural textures / materials =================
 const hash=(x,y)=>{const s=Math.sin(x*127.1+y*311.7)*43758.5453;return s-Math.floor(s)};
@@ -72,12 +72,21 @@ function updParticles(dt){for(let i=0;i<PN;i++){if(pL[i]>0){pL[i]-=dt;const k=Ma
 
 // ================= state =================
 const S0={lvl:0,xen:0,hub:0,weapon:'pick',stance:0,align:null,dr:0,potions:2,maxHp:100,atk:1,merchant:false,spark:false,dash:false,grapple:false,
- melt:false,miasma:false,unified:false,nymphs:false,helios:false,post:false,ending:null,skin:0,gaunt:false,sh:[],name:'Spark-bearer',sex:'m',skinT:2,hairS:1,hairC:0,house:0,xp:0,plv:1};
+ melt:false,miasma:false,unified:false,nymphs:false,helios:false,post:false,ending:null,skin:0,gaunt:false,sh:[],name:'Spark-bearer',sex:'m',skinT:2,hairS:6,hairC:0,house:0,xp:0,plv:1,tp:0,tal:{},wpn:0,arm:0,rift:0,stat:{k:0,p:0,b:0},claim:[]};
+// long-term progression: talents (points from levels), forge tiers (drachma), trials (milestones)
+const TAL=[['undying','Undying','+15 max HP'],['blood','Titan Blood','+5% attack'],['wind','Swift Wind','+4% move speed'],['focus','Divine Focus','+15% gold meter gain'],['hide','Ironhide','−4% damage taken'],['greed','Hermes’ Favour','+10% drachma']];
+const tr=k=>S.tal[k]|0,forgeC=t=>Math.round(60*(t+1)**1.6);
+const TRIALS=[['k',100,'Slay 100 foes',[40,1]],['k',500,'Slay 500 foes',[150,2]],['k',2000,'Slay 2,000 foes',[400,3]],['k',10000,'Slay 10,000 foes',[1500,5]],
+ ['p',25,'Perfect-parry 25 attacks',[60,1]],['p',150,'Perfect-parry 150 attacks',[250,2]],['p',600,'Perfect-parry 600 attacks',[800,4]],
+ ['b',5,'Vanquish 5 bosses',[100,1]],['b',25,'Vanquish 25 bosses',[500,3]],['b',75,'Vanquish 75 bosses',[1500,5]],
+ ['r',5,'Clear Rift tier 5',[150,1]],['r',15,'Clear Rift tier 15',[500,2]],['r',30,'Clear Rift tier 30',[1200,4]],['r',60,'Clear Rift tier 60',[3000,6]],['r',100,'Clear Rift tier 100 — Primordial',[8000,10]],
+ ['l',10,'Reach level 10',[100,1]],['l',25,'Reach level 25',[400,2]],['l',50,'Reach level 50',[1200,4]],['l',99,'Reach level 99',[5000,8]]];
+const trialV=k=>k=='r'?S.rift:k=='l'?S.plv:S.stat[k]|0;
 const HOUSES=[{n:'House of the Flame',p:'Prometheus',c:0xb3261a,d:0x4a1a14,t:'+15% Spark Blast damage',q:'You steal fire from those who hoard it.'},
  {n:'House of the Owl',p:'Athena',c:0x2a56b0,d:0x1a2a4a,t:'+15% damage resistance, wider parry window',q:'You see the blow before it falls.'},
  {n:'House of the Hunt',p:'Artemis',c:0x2a8a46,d:0x1a3a22,t:'+10% speed, faster stamina recovery',q:'You run where others stumble.'},
  {n:'House of the Anvil',p:'Hephaestus',c:0xc08020,d:0x4a3418,t:'+15% melee damage',q:'You were forged, not born.'}];
-const SKINS=[0xf1c7a5,0xd9a57e,0xb67a52,0x8d5a3b,0x5e3b26,0x3b2418],HAIRC=[0x1a120c,0x4a2a14,0x8a5a2a,0xd8b060,0xa8a8a8,0x8a1a10],HAIRS=['Shaved','Short','Long','Ponytail','Curls','Topknot'];
+const SKINS=[0xf1c7a5,0xd9a57e,0xb67a52,0x8d5a3b,0x5e3b26,0x3b2418],HAIRC=[0x1a120c,0x4a2a14,0x8a5a2a,0xd8b060,0xa8a8a8,0x8a1a10],HAIRS=['Shaved','Short','Long','Ponytail','Curls','Topknot','Tousled'];
 const load=()=>{try{return JSON.parse(localStorage.getItem('titano'))}catch(e){return null}};
 let S=Object.assign(structuredClone(S0),load()||{}),Sstart='{}';
 let PID=(()=>{try{let i=localStorage.getItem('titano_id');if(!i){i=crypto.randomUUID();localStorage.setItem('titano_id',i)}return i}catch(e){return null}})();
@@ -85,7 +94,7 @@ const API=/^https?:/.test(location.protocol);
 const save=()=>{S.t=Date.now();try{localStorage.setItem('titano',JSON.stringify(S))}catch(e){}if(API&&PID)fetch('/api/save/'+PID,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(S)}).catch(()=>{})};
 async function cloudLoad(force){if(API&&PID)try{const r=await fetch('/api/save/'+PID);if(r.ok){const d=await r.json();if(d&&(force||(d.t||0)>(S.t||0))){S=Object.assign(structuredClone(S0),d);try{localStorage.setItem('titano',JSON.stringify(S))}catch(e){}}}}catch(e){}
  $('cont').style.display=S.lvl>0||S.post?'':'none'}
-const xpNeed=()=>80+S.plv*40;function gainXP(n){S.xp+=n;while(S.xp>=xpNeed()){S.xp-=xpNeed();S.plv++;S.maxHp+=8;S.atk*=1.04;pl.hp=S.maxHp;pop('LEVEL '+S.plv);emit(new V3(pl.pos.x,pl.pos.y+1,pl.pos.z),120,{c:[3,2.4,.8],spd:5,up:3,life:1})}}
+const xpNeed=()=>80+S.plv*40;function gainXP(n){S.xp+=n;while(S.xp>=xpNeed()){S.xp-=xpNeed();S.plv++;S.tp++;S.maxHp+=8;S.atk*=1.04;pl.hp=S.maxHp;banner('LEVEL '+S.plv,'+1 Talent Point — spend it at the hub');emit(new V3(pl.pos.x,pl.pos.y+1,pl.pos.z),120,{c:[3,2.4,.8],spd:5,up:3,life:1})}}
 const WEAP={pick:{col:0xc0c8d0,st:[{n:'Pickaxe',dmg:11,rng:2.4,arc:2,spd:.45,heavy:2.2}]},
  staff:{col:0x60d8ff,st:[{n:'Sword Stance',dmg:13,rng:2.9,arc:1.7,spd:.3,heavy:2},{n:'Whip Stance',dmg:10,rng:6.5,arc:2.8,spd:.48,heavy:2.1}]},
  aegis:{col:0xffa040,st:[{n:'Shield Stance',dmg:12,rng:2.6,arc:2.2,spd:.45,heavy:2,guard:.5},{n:'Axe Stance',dmg:22,rng:3.2,arc:2.4,spd:.7,heavy:2.4,armor:1.6}]},
@@ -97,7 +106,7 @@ const wcol=()=>[WEAP[S.weapon].col,0xffc860,0x9a80ff][S.skin]||WEAP[S.weapon].co
 const W={},FX=[];
 function resetWorld(){if(W.grp){scene.remove(W.grp);W.grp.traverse(o=>{o.geometry?.dispose();[].concat(o.material||[]).forEach(m=>m.dispose())})}
  scene.remove(sky);Object.assign(W,{grp:new THREE.Group(),cols:[],enemies:[],proj:[],haz:[],anchors:[],inter:[],emitters:[],lights:[],spin:[],waiters:[],
-  tick:null,time:0,grav:1,boss:null,floor:true,R:40,floorY:0,killY:-20,water:null,lava:null,amb:null,acc:0});FX.length=0;scene.add(W.grp)}
+  tick:null,time:0,grav:1,ceil:0,warp:0,rift:0,hsc:1,dsc:1,gsc:1,arrive:0,boss:null,floor:true,R:40,floorY:0,killY:-20,water:null,lava:null,amb:null,acc:0});FX.length=0;scene.add(W.grp)}
 const add=(o,x=0,y=0,z=0)=>{o.position.set(x,y,z);W.grp.add(o);return o};
 function block(x,y,z,w,h,d,m,solid=true){const o=add(mesh(boxGeo(w,h,d),m),x,y,z);if(solid)W.cols.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,bot:y-h/2,top:y+h/2});return o}
 function cyl(x,y,z,r,h,m,solid=true,seg=20,rb=r){const o=add(mesh(uvS(new THREE.CylinderGeometry(r,rb,h,seg),r*1.5,Math.max(h/4,r/2)),m),x,y,z);if(solid)W.cols.push({cyl:1,x,z,r,bot:y-h/2,top:y+h/2});return o}
@@ -125,29 +134,32 @@ function applyTheme(t){const post=S.post&&!t.cave&&!t.void,s=post?{e:38,a:(t.sky
  W.sunDir=new V3().setFromSphericalCoords(1,(90-s.e)*PI/180,s.a*PI/180);const u=sky.material.uniforms;
  u.turbidity.value=s.t;u.rayleigh.value=s.r;u.mieCoefficient.value=.005;u.mieDirectionalG.value=.8;u.sunPosition.value.copy(W.sunDir);
  skyScene.add(sky);envRT?.dispose();envRT=pmrem.fromScene(skyScene,0,.1,10000);scene.environment=envRT.texture;scene.environmentIntensity=Math.max(t.env??.5,.45);
- if(t.sky||post)scene.add(sky);renderer.toneMappingExposure=(t.exp??1)*1.2*(S.post?1.1:1);bloom.strength=t.bloom??.7;W.amb=t.amb}
+ if(t.sky||post)scene.add(sky);renderer.toneMappingExposure=(t.exp??1)*1.1*(S.post?1.05:1);bloom.strength=(t.bloom??.7)*.6;W.amb=t.amb}
 
 // ================= characters =================
 function humanoid(o){const M=[],mk=(c,x={})=>{const m=mat(c,o.ghost?{...x,e:o.ghost,ei:.6,op:.82}:x);M.push(m);return m};
  const f=o.sex=='f',b=o.bulk??1,ab=b*(f?.85:1),P=(geo,m,x,y,z,p,sc)=>{const q=mesh(geo,m);q.position.set(x,y,z);if(sc)q.scale.set(...sc);p.add(q);return q},
   Sp=(r,m,x,y,z,p,sc)=>P(new THREE.SphereGeometry(r,18,14),m,x,y,z,p,sc),
   La=(pts,m,p,k)=>{const q=P(new THREE.LatheGeometry(pts.map(([r,h])=>new THREE.Vector2(r*k*b,h)),28),m,0,0,0,p);q.scale.z=.74;return q};
- const skin=mk(o.skin??0xc08a68,{r:.55,b:.2}),cloth=mk(o.cloth??0x553322,{ds:1,r:.95}),arm=mk(o.armor??0x8a7a5a,{m:.85,r:.35,ds:1}),hm=mk(o.hair??0x1a120c,{r:.75,b:2}),boot=mk(o.boot??0x3a2618,{r:.7});
+ const skin=mk(o.skin??0xc08a68,{r:.55,b:.2}),cloth=mk(o.cloth??0x553322,{ds:1,r:.95}),arm=mk(o.armor??0x8a7a5a,o.leather?{m:.15,r:.6,ds:1}:{m:.85,r:.35,ds:1}),hm=mk(o.hair??0x1a120c,{r:.75,b:2}),boot=mk(o.boot??0x3a2618,{r:.7});
  const g=new THREE.Group(),hips=new THREE.Group();hips.position.y=1;g.add(hips);
  const prof=f?[[0,-.08],[.18,-.06],[.215,.04],[.18,.16],[.145,.27],[.17,.37],[.185,.45],[.165,.51],[.09,.56],[.05,.6]]:[[0,-.08],[.165,-.06],[.19,.05],[.18,.18],[.17,.27],[.21,.38],[.235,.46],[.215,.52],[.11,.57],[.055,.6]];
  La(prof,cloth,hips,1);if(f)for(const x of[-.075,.075])Sp(.068,cloth,x,.41,.1,hips,[1,1,.85]);
  if(o.armor!=null&&!o.robe)La(prof.slice(3,9),arm,hips,1.08);
  P(new THREE.TorusGeometry(.185*b,.022,8,28),mk(o.belt??0x3a2414,{r:.6}),0,.07,0,hips,[1,.74,1]).rotation.x=PI/2;
  P(new THREE.CylinderGeometry(.19*b,(o.robe?.4:.26)*b,o.robe?1.02:.38,24,1,true),cloth,0,o.robe?-.43:-.1,0,hips,[1,1,.8]);
+ if(o.armor!=null&&!o.robe)for(let i=0;i<14;i++){const a=i/14*TAU,q=P(boxGeo(.075*b,.2,.018),arm,Math.sin(a)*.205*b,-.06,Math.cos(a)*.155*b,hips);q.rotation.y=a;q.rotation.x=.12}
  P(new THREE.CylinderGeometry(.05*ab,.058*ab,.14,12),skin,0,.6,0,hips);
  const head=new THREE.Group();head.position.y=.78;hips.add(head);
- Sp(.115,skin,0,0,0,head,[.9,1.08,1]);Sp(f?.074:.086,skin,0,-.06,.03,head,[1,.8,1]);
+ head.scale.setScalar(.93);Sp(.115,skin,0,0,0,head,[.9,1.08,1]);Sp(f?.074:.086,skin,0,-.06,.03,head,[1,.8,1]);
  P(new THREE.ConeGeometry(.019,.055,6),skin,0,-.008,.115,head).rotation.x=PI/2;for(const x of[-.104,.104])Sp(.024,skin,x,0,0,head,[.5,1,.8]);
  const eyeM=o.eye?glow(o.eye,5):mk(0x15100c,{r:.2,f:1});
  if(o.cyclops){Sp(.042,eyeM,0,.02,.098,head);P(boxGeo(.11,.016,.02),hm,0,.06,.1,head)}
- else for(const x of[-.04,.04]){Sp(.015,eyeM,x,.02,.098,head);P(boxGeo(.045,.01,.015),hm,x,.047,.103,head)}
+ else for(const x of[-.04,.04]){if(!o.eye)Sp(.02,mk(0xf2ece4,{r:.3}),x,.02,.09,head,[1.2,.8,.6]);Sp(o.eye?.015:.011,eyeM,x,.02,o.eye?.098:.101,head);P(boxGeo(.045,.012,.015),hm,x,.048,.103,head)}
  const hs=o.hs??(o.helm||o.hood?-1:1),cap=k=>{const c=P(new THREE.SphereGeometry(.125*k,18,10,0,TAU,0,PI*.55),hm,0,.016,-.012,head);c.rotation.x=-.22;return c};
- if(hs>=1&&hs<=3||hs==5)cap(1);if(hs==4)cap(1.2).scale.y=1.08;
+ if(hs>=1&&hs<=3||hs==5||hs==6)cap(hs==6?1.07:1);
+ if(hs==6)for(let i=0;i<16;i++){const a=i/16*TAU+Math.sin(i*3.7)*.15,fr=Math.cos(a)>.55,d=fr?new V3(Math.sin(a)*.6,-.25,1).normalize():new V3(Math.sin(a)*.75,.95+Math.sin(i*5.3)*.25,Math.cos(a)*.75).normalize(),
+  l=P(new THREE.SphereGeometry(fr?.032:.04,10,8),hm,0,0,0,head,[.8,fr?1.7:1.9,.55]);l.quaternion.setFromUnitVectors(new V3(0,1,0),d);l.position.set(Math.sin(a)*.085,fr?.075:.085,Math.cos(a)*.07).addScaledVector(d,.02)}if(hs==4)cap(1.2).scale.y=1.08;
  if(hs==2)P(new THREE.CylinderGeometry(.118,.14,.34,18,1,true,PI/2,PI),hm,0,-.15,-.012,head);
  if(hs==3){Sp(.055,hm,0,.02,-.13,head);P(new THREE.ConeGeometry(.045,.32,8),hm,0,-.15,-.15,head).rotation.x=PI-.25}
  if(hs==5)Sp(.065,hm,0,.13,-.05,head);
@@ -160,8 +172,12 @@ function humanoid(o){const M=[],mk=(c,x={})=>{const m=mat(c,o.ghost?{...x,e:o.gh
  if(o.halo)P(new THREE.TorusGeometry(.32,.02,8,48),glow(0xffd060,4),0,.06,-.2,head);
  const limb=(x,y,l1,l2,r1,r2,m1,m2)=>{const p=new THREE.Group();p.position.set(x,y,0);hips.add(p);P(new THREE.CylinderGeometry(r1,r1*.82,l1,14),m1,0,-l1/2,0,p);
   const j=new THREE.Group();j.position.y=-l1;p.add(j);Sp(r1*.82,m1,0,0,0,j);P(new THREE.CylinderGeometry(r2,r2*.75,l2,14),m2,0,-l2/2,0,j);const e=new THREE.Group();e.position.y=-l2;j.add(e);return[p,j,e]};
- const sw=(f?.18:.205)*b,[aL,eL,handL]=limb(-sw,.49,.29,.26,.058*ab,.046*ab,skin,o.armor!=null?arm:skin),[aR,eR,hand]=limb(sw,.49,.29,.26,.058*ab,.046*ab,skin,o.armor!=null?arm:skin);
- for(const[a,h]of[[aL,handL],[aR,hand]]){Sp(.07*ab,o.armor!=null?arm:skin,0,0,0,a,o.armor!=null?[1.4,1,1.3]:null);Sp(.042*ab,skin,0,-.04,0,h,[.75,1.15,.5])}
+ const sw=(f?.18:.205)*b,[aL,eL,handL]=limb(-sw,.49,.29,.26,.056*ab,.044*ab,skin,skin),[aR,eR,hand]=limb(sw,.49,.29,.26,.056*ab,.044*ab,skin,skin),brc=mk(o.bracer??0x2a1c12,{r:.7});
+ for(const[a,h,sx]of[[aL,handL,-1],[aR,hand,1]]){Sp(.066*ab,o.armor!=null||o.pants?cloth:skin,0,0,0,a,[1.15,1,1.1]);
+  if(!o.robe&&(o.armor!=null||o.pants))P(new THREE.CylinderGeometry(.068*ab,.064*ab,.13,14),cloth,0,-.06,0,a);
+  if(o.armor!=null)for(const[y,k]of[[.03,1],[-.035,.86]]){const q=P(new THREE.SphereGeometry(.1*ab*k,16,8,0,TAU,0,PI*.5),arm,sx*.01,y,0,a,[1.05,.7,1.1]);q.rotation.z=-sx*.35}
+  P(new THREE.CylinderGeometry(.051*ab,.046*ab,.15,14),o.armor!=null?arm:brc,0,-.12,0,a.children[1]);
+  Sp(.042*ab,skin,0,-.04,0,h,[.75,1.15,.5]);P(new THREE.CylinderGeometry(.012,.012,.05,6),skin,sx*-.03,-.02,.02,h).rotation.z=sx*.6}
  let lL,lR,kL,kR,tail=null;
  if(o.tail){lL=new THREE.Group();lR=new THREE.Group();kL=new THREE.Group();kR=new THREE.Group();tail=new THREE.Group();hips.add(tail);const tm=mk(o.skin,{r:.5,m:.2});
   for(let i=0;i<16;i++){const t=i/15,sg=Sp(.21*(1-t*.8)*b,tm,0,lerp(-.1,-.88,Math.min(1,t*2.2)),-Math.max(0,t*2.2-1)*1.9,tail);sg.scale.set(1,.85,1.2)}}
@@ -216,19 +232,29 @@ const warnTex=c=>{const cv=document.createElement('canvas');cv.width=cv.height=6
  g.fillStyle='#000';g.font='bold 40px sans-serif';g.textAlign='center';g.fillText('!',32,55);return new THREE.CanvasTexture(cv)};
 const WY=new THREE.SpriteMaterial({map:warnTex('#ffd23a'),depthTest:false}),WR=new THREE.SpriteMaterial({map:warnTex('#ff3a2a'),depthTest:false}),WT={swipe:[1.2,WY],volley:[.6,WY],slam:[.9,WR],charge:[1.2,WR],wave:[.7,WR],dive:[1.1,WR]};
 const BBG=new THREE.SpriteMaterial({color:0,transparent:true,opacity:.6,depthTest:false}),BFG=new THREE.SpriteMaterial({color:0xff4040,depthTest:false});
-function spawn(t,x,z,y,hard){const T=ET[t],H=T.build?null:humanoid(T.h);if(H&&(T.w||T.sh))eWeap(H,T.w,T.sh);const s=T.h?.s||1;
+function spawn(t,x,z,y,hard,o){const T=ET[t],H=T.build?null:humanoid(T.h);if(H&&(T.w||T.sh))eWeap(H,T.w,T.sh);const s=T.h?.s||1;
  const e={t,T,H,root:H?H.g:T.build(),pos:new V3(x,y??Math.max(groundAt(x,z,60),0),z),vel:new V3(),hp:T.hp*(hard?1.6:1),state:'chase',tt:rand(.5,1.5),py:0,
   face:Math.atan2(pl.pos.x-x,pl.pos.z-z),flash:0,r:T.r||.45*s,h:1.9*s,stun:0,ph:0,spd:hard?1.35:1,mt:1.5,fly:T.fly,hc:0,ca:0,as:0,grounded:0,M:[]};
- e.mhp=e.hp;e.cy=T.cy??e.h*.55;e.root.traverse(o=>{if(o.material?.emissive){o.material.userData.e=o.material.emissive.clone();e.M.push(o.material)}});
+ e.hp*=W.hsc||1;e.mhp=e.hp;e.cy=T.cy??e.h*.55;e.root.traverse(o=>{if(o.material?.emissive){o.material.userData.e=o.material.emissive.clone();e.M.push(o.material)}});
+ if(o?.from){e.go=new V3(x,0,z);e.pos.set(o.from[0],Math.max(groundAt(o.from[0],o.from[1],60),0),o.from[1]);e.state='march';e.face=Math.atan2(x-o.from[0],z-o.from[1])}
+ if(o?.rise){e.state='rise';e.tt=1.3;e.gy=e.pos.y;e.pos.y-=e.h*1.1}
+ if(o?.guard){e.state='guard';e.ag=o.guard;if(o.look)e.face=Math.atan2(o.look[0]-x,o.look[1]-z)}
  W.grp.add(e.root);e.root.position.copy(e.pos);W.enemies.push(e);
  if(!T.boss&&!T.st){e.bb=new THREE.Sprite(BBG);e.bf=new THREE.Sprite(BFG);e.bf.center.set(0,.5);e.bb.renderOrder=e.bf.renderOrder=9;W.grp.add(e.bb,e.bf)}
  if(!T.st){e.wn=new THREE.Sprite(WY);e.wn.visible=false;e.wn.renderOrder=10;e.wn.scale.setScalar(.6*Math.max(1,s*.6));W.grp.add(e.wn)}
- if(T.boss)W.boss=e;if(!T.st)emit(new V3(x,e.pos.y+1,z),30,{c:[1.5,.4,.2],spd:4,life:.6});return e}
+ if(T.boss)W.boss=e;return e}
+// guards wake up together; a rift is a visible door for reinforcements
+function alertG(e){for(const o of W.enemies)if(o.state=='guard'&&!o.dead&&(o===e||o.pos.distanceTo(e.pos)<14)){o.state='chase';o.tt=rand(.2,.8)}}
+const wake=l=>l.forEach(e=>{if(e.state=='guard'){e.state='chase';e.tt=rand(.2,.8)}});
+function rift(x,z,col=0x8a30ff,life=3){sfx('rift');const g=new THREE.Group(),y=Math.max(groundAt(x,z,60),0);
+ g.add(mesh(new THREE.TorusGeometry(1.4,.1,8,40),glow(col,4),false),mesh(new THREE.CircleGeometry(1.36,32),new THREE.MeshBasicMaterial({color:0x07020c,transparent:true,opacity:.9,side:2}),false));
+ g.position.set(x,y+1.9,z);g.rotation.y=Math.atan2(pl.pos.x-x,pl.pos.z-z);shake(.4);
+ fx(g,life,o=>{const s=Math.min(1,(1-o.userData.k)*5,o.userData.k*6);o.scale.set(s*1.2,s*1.7,1);if(Math.random()<.6)emit(o.position,2,{c:colA(col,2),spd:2,life:.5,size:.2,g:0})});g.userData.k=0;return g}
 const ec=e=>new V3(e.pos.x,e.pos.y+e.cy,e.pos.z);
-function hurtE(e,d,kb=0,am){if(e.dead)return;if(e.T.armor)d*=am||.75;e.hp-=d;e.flash=.1;e.hc++;emit(ec(e),10,{c:[2,1.6,.8],spd:6,life:.35,size:.18});
+function hurtE(e,d,kb=0,am){if(e.dead)return;sfx('hit');if(e.T.armor)d*=am||.75;e.hp-=d;e.flash=.1;e.hc++;emit(ec(e),10,{c:[2,1.6,.8],spd:6,life:.35,size:.18});
  if(kb&&!e.T.boss&&!e.T.st){const dx=e.pos.x-pl.pos.x,dz=e.pos.z-pl.pos.z,l=Math.hypot(dx,dz)||1;e.vel.x+=dx/l*kb;e.vel.z+=dz/l*kb;if(kb>3){e.stun=.5;if(e.state=='wind'){e.state='rec';e.tt=.6}}}
- pl.meter=Math.min(100,pl.meter+d*.22);if(e.hp<=0)kill(e)}
-function kill(e){if(e.dead)return;e.dead=true;e.dt=0;S.dr+=e.T.gold||0;emit(ec(e),e.T.boss?200:60,{c:e.T.boss?[2.5,1.8,.6]:[1.8,.5,.2],spd:e.T.boss?10:7,life:.9,size:.3});
+ pl.meter=Math.min(100,pl.meter+d*.22*(1+.15*tr('focus')));if(e.hp<=0)kill(e)}
+function kill(e){if(e.dead)return;if(!e.T.boss)sfx('kill');e.dead=true;e.dt=0;S.dr+=Math.round((e.T.gold||0)*(1+.1*tr('greed'))*(W.gsc||1));if(!e.T.st)S.stat.k++;if(e.T.boss)bossDeath(e);emit(ec(e),e.T.boss?200:60,{c:e.T.boss?[2.5,1.8,.6]:[1.8,.5,.2],spd:e.T.boss?10:7,life:.9,size:.3});
  if(e.bb)W.grp.remove(e.bb,e.bf);if(e.wn)W.grp.remove(e.wn);gainXP(Math.round(e.mhp*.6));if(W.boss===e)W.boss=null;if(e.col)W.cols=W.cols.filter(c=>c!==e.col)}
 function towerT(e,dt){e.tt-=dt;const lens=new V3(e.pos.x,e.pos.y+7.8,e.pos.z);
  if(e.tt<=0&&lens.distanceTo(pl.pos)<45){e.tt=rand(3.5,5);hz({k:'beam',a:lens,b:new V3(pl.pos.x,pl.pos.y+.9,pl.pos.z).addScaledVector(pl.vel,.35),w:1.3,delay:1,dmg:18})}}
@@ -240,7 +266,11 @@ function updEnemy(e,dt){const T=e.T;
  T.tick?.(e,dt);
  if(T.st){if(e.t=='eye')e.pos.y+=Math.sin(W.time*2+e.pos.x)*dt*.5;e.root.position.copy(e.pos);if(e.t=='eye')e.root.lookAt(pl.pos.x,pl.pos.y+1,pl.pos.z);return}
  const dx=pl.pos.x-e.pos.x,dz=pl.pos.z-e.pos.z,d=Math.hypot(dx,dz),ty=Math.atan2(dx,dz);e.stun-=dt;e.grounded-=dt;e.as-=dt;e.mv=0;let arm=null;
- if(T.boss)bossAI(e,dt,d,ty);
+ if(e.state=='rise'){e.tt-=dt;e.pos.y=e.gy-Math.max(e.tt,0)/1.3*e.h*1.1;e.face=turn(e.face,ty,dt*4);e.root.position.copy(e.pos);e.root.rotation.y=e.face;if(e.wn)e.wn.visible=false;
+  if(Math.random()<.7)emit(new V3(e.pos.x,e.gy+.1,e.pos.z),2,{c:[.7,.3,1.4],spd:1.5,up:2,life:.8,size:.35,r:.6});if(e.tt<=0){e.state='chase';e.tt=rand(.3,.8)}return}
+ if(e.state=='guard'){if(e.hp<e.mhp||(d<e.ag&&Math.abs(pl.pos.y-e.pos.y)<4))alertG(e)}
+ else if(e.state=='march'){const mx=e.go.x-e.pos.x,mz=e.go.z-e.pos.z;e.face=turn(e.face,Math.atan2(mx,mz),dt*6);e.mv=1;if(Math.hypot(mx,mz)<.8||d<6){e.state='chase';e.tt=rand(.2,.6)}}
+ else if(T.boss)bossAI(e,dt,d,ty);
  else if(e.stun<=0){if(e.state=='chase'){e.face=turn(e.face,ty,dt*8);
    if(T.ranged){e.mv=d>T.rng*.8?1:d<T.rng*.4?-1:0;if(d<T.rng&&(e.tt-=dt)<=0){e.state='wind';e.tt=T.wind}}
    else{e.mv=d>T.rng*.8?1:0;if(d<T.rng+.3&&Math.abs(pl.pos.y-e.pos.y)<2.5){e.state='wind';e.tt=T.wind}}}
@@ -255,10 +285,10 @@ function updEnemy(e,dt){const T=e.T;
  if(d<e.r+.45&&d>1e-3&&Math.abs(pl.pos.y-e.pos.y)<2){const k=e.r+.45-d;if(T.boss){pl.pos.x+=dx/d*k;pl.pos.z+=dz/d*k}else{sx-=dx/d*k;sz-=dz/d*k}}
  const kk=1-Math.exp(-6*dt);if(!e.charging){e.vel.x=lerp(e.vel.x,Math.sin(e.face)*sp+sx*5,kk);e.vel.z=lerp(e.vel.z,Math.cos(e.face)*sp+sz*5,kk)}
  const flying=e.fly&&!(e.grounded>0)&&!e.dive;e.py=e.pos.y;
- if(flying){const hy=T.boss?W.floorY+5:pl.pos.y+(e.state=='wind'?.2:3.2);e.pos.y=lerp(e.pos.y,hy,1-Math.exp(-3*dt));e.vel.y=0;e.pos.x+=e.vel.x*dt;e.pos.z+=e.vel.z*dt}
+ if(flying){const hy=T.boss?W.floorY+5:pl.pos.y+(e.state=='wind'?.2:3.2)*W.grav;e.pos.y=lerp(e.pos.y,hy,1-Math.exp(-3*dt));if(W.ceil)e.pos.y=Math.min(e.pos.y,W.ceil-(W.grav<0?.2:e.h));e.vel.y=0;e.pos.x+=e.vel.x*dt;e.pos.z+=e.vel.z*dt}
  else{if(!e.charging&&groundAt(e.pos.x+e.vel.x*.2,e.pos.z+e.vel.z*.2,e.pos.y+.6)<e.pos.y-1.2){e.vel.x*=-.3;e.vel.z*=-.3}
   e.vel.y=Math.max(e.vel.y-26*dt,-30);e.pos.addScaledVector(e.vel,dt);collide(e,e.r,e.h);if(e.pos.y<W.killY-3)kill(e)}
- e.root.position.copy(e.pos);e.root.rotation.y=e.face;
+ e.root.position.copy(e.pos);e.root.rotation.y=e.face;if(e.fly&&!T.boss){e.rz=lerp(e.rz||0,W.grav<0?PI:0,1-Math.exp(-6*dt));e.root.rotation.z=e.rz}
  if(e.H){const hs=Math.hypot(e.vel.x,e.vel.z);e.ph+=dt*hs*1.8;const ta=T.boss?e.arm:arm;e.ca=lerp(e.ca,ta??0,1-Math.exp(-18*dt));
   animH(e.H,e.ph,flying?.15:Math.min(hs/3,1.2),ta!=null||Math.abs(e.ca)>.05?e.ca:null,T.w=='scim'&&ta!=null?e.ca:null)}
  if(e.wn){let w=null;if(T.boss){const m=e.move,tl=m&&WT[m.n];if(tl&&m.t<tl[0])w=tl[1]}else if(e.state=='wind')w=WY;
@@ -346,9 +376,12 @@ function groundAt(x,z,y){let s=-Infinity;if(W.floor&&Math.hypot(x,z)<W.R+1)s=W.f
 const pl={pos:new V3(),vel:new V3(),py:0,face:PI,hp:100,st:100,sp:100,inv:0,dodge:0,dd:new V3(),atk:null,combo:0,ct:0,buf:0,grap:null,air:1,gcd:0,barrier:0,fs:false,onGround:false,ph:0,safe:new V3(),safeT:0,wg:[]};
 let PH;const tether=mesh(new THREE.CylinderGeometry(.035,.035,1,6).rotateX(PI/2),glow(0xffd070,4),false),barrierM=mesh(new THREE.SphereGeometry(1.7,32,16),glow(0x60a0ff,1.2,.25),false),fireOrbs=new THREE.Group();
 for(let i=0;i<3;i++){const o=mesh(new THREE.SphereGeometry(.18,10,8),glow(0xff7020,5),false);fireOrbs.add(o)}const parryM=mesh(new THREE.TorusGeometry(1.1,.04,8,48),glow(0x80c8ff,4,.9),false);parryM.rotation.x=PI/2;scene.add(tether,barrierM,fireOrbs,parryM);parryM.visible=false;barrierM.visible=fireOrbs.visible=tether.visible=false;
-function buildPlayer(){if(PH)scene.remove(PH.g);PH=humanoid({sex:S.sex,skin:SKINS[S.skinT],hair:HAIRC[S.hairC],hs:S.hairS,cloth:S.spark?HOUSES[S.house].d:0x6b5a48,armor:S.spark?0x8a6a3a:null,pants:1,boot:S.spark?0x2a1a10:0x4a3a2a});scene.add(PH.g);
- const cg=new THREE.CylinderGeometry(.26,.4,1.05,12,4,true,PI*.72,PI*.56).translate(0,-.52,.08);PH.cape=mesh(cg,mat(S.spark?HOUSES[S.house].c:0x4a3a2a,{ds:1}));PH.cape.position.set(0,.52,-.15);PH.hips.add(PH.cape);
- if(S.spark){const c=mesh(new THREE.SphereGeometry(.07,10,8),glow(S.miasma?0x60ff30:0x80d8ff,6),false);c.position.set(0,.43,.17);PH.hips.add(c)}buildWeapon()}
+function buildPlayer(){if(PH)scene.remove(PH.g);PH=humanoid({sex:S.sex,skin:SKINS[S.skinT],hair:HAIRC[S.hairC],hs:S.hairS,cloth:S.spark?HOUSES[S.house].d:0x6b5a48,armor:S.spark?0x6e4a2a:null,leather:1,bracer:0x1c1612,pants:1,boot:S.spark?0x2a1a10:0x4a3a2a});scene.add(PH.g);
+ const cg=new THREE.CylinderGeometry(.25,.42,1.05,16,6,true,PI*.62,PI*.76).translate(0,-.5,0).scale(1,1,.78);PH.cape=mesh(cg,mat(S.spark?HOUSES[S.house].c:0x4a3a2a,{ds:1}));PH.cape.position.set(0,.53,0);PH.hips.add(PH.cape);
+ // the cape hangs from a mantle across the shoulders, pinned with two clasps
+ const mn=mesh(new THREE.TorusGeometry(.2,.03,8,24,PI*.9).rotateX(PI/2).rotateY(PI*.05).scale(1.05,1,.78),PH.cape.material);mn.position.set(0,.53,0);mn.rotation.y=PI;PH.hips.add(mn);
+ for(const x of[-.19,.19]){const c=mesh(new THREE.SphereGeometry(.03,10,8),mat(0xd0a040,{m:1,r:.25}));c.position.set(x,.52,-.04);PH.hips.add(c)}
+ if(S.spark){const c=mesh(new THREE.SphereGeometry(.045,10,8),glow(S.miasma?0x60ff30:0x80d8ff,2.2),false);c.position.set(0,.43,.17);PH.hips.add(c)}buildWeapon()}
 function buildWeapon(){for(const g of pl.wg)g.parent?.remove(g);pl.wg=[];const w=S.weapon,st=S.stance,c=wcol(),k=S.unified?5:3,G=glow(c,k),GT=glow(c,k*.6,.4),iron=mat(0x24262c,{m:.9,r:.3}),brz=mat(0xb07a3a,{m:.95,r:.25});
  const grp=h=>{const g=new THREE.Group();h.add(g);pl.wg.push(g);return g},A=(g,geo,m,x,y,z,rx=PI/2)=>{const q=mesh(geo,m);q.position.set(x,y,z);q.rotation.x=rx;g.add(q);return q};
  const g=grp(PH.hand);pl.tip=new THREE.Object3D();g.add(pl.tip);pl.dode=null;
@@ -362,15 +395,15 @@ function buildWeapon(){for(const g of pl.wg)g.parent?.remove(g);pl.wg=[];const w
  if(w=='claws')for(const h of[PH.hand,PH.handL]){const gg=grp(h);A(gg,boxGeo(.2,.3,.2),iron,0,.1,0,0);for(const i of[-1,0,1])A(gg,new THREE.ConeGeometry(.035,st?.5:.75,4),G,i*.07,0,.45);pl.tip.position.set(0,0,.8)}}
 function player(x,z,y){pl.pos.set(x,y??Math.max(groundAt(x,z,60),0),z);pl.safe.copy(pl.pos);pl.vel.set(0,0,0);pl.face=cam.yaw=PI;cam.pitch=.3;cam.pos.set(x,pl.pos.y+4,z+7)}
 function inputDir(){const f=new V3(Math.sin(cam.yaw),0,Math.cos(cam.yaw)),m=new V3();if(K.KeyW)m.add(f);if(K.KeyS)m.sub(f);
- if(K.KeyD){m.x-=f.z;m.z+=f.x}if(K.KeyA){m.x+=f.z;m.z-=f.x}return m.lengthSq()?m.normalize():m}
-function parried(src){pl.parry=0;pl.meter=Math.min(100,pl.meter+20);hitstop=.12;shake(.35);pop('PERFECT PARRY');emit(new V3(pl.pos.x,pl.pos.y+1.1,pl.pos.z),40,{c:[.6,1.4,3],spd:7,life:.4});
+ const iv=Math.cos(cam.roll||0)<0?-1:1;if(K.KeyD){m.x-=f.z*iv;m.z+=f.x*iv}if(K.KeyA){m.x+=f.z*iv;m.z-=f.x*iv}return m.lengthSq()?m.normalize():m}
+function parried(src){S.stat.p++;sfx('parry');pl.parry=0;pl.meter=Math.min(100,pl.meter+20);hitstop=.12;shake(.35);pop('PERFECT PARRY');emit(new V3(pl.pos.x,pl.pos.y+1.1,pl.pos.z),40,{c:[.6,1.4,3],spd:7,life:.4});
  if(src&&!src.dead){src.stun=src.T.boss?1.2:1.8;src.charging=0;if(src.T.boss){src.move=null;src.arm=null;src.mt=1.4}else{src.state='rec';src.tt=1.6}hurtE(src,20*S.atk,5,2)}}
 function parry(){if(pl.pcd>0||pl.dead)return;pl.parry=S.house==1?.42:.3;pl.pcd=.65;pl.atk=null}
 function sight(){if(pl.scd>0)return;pl.scd=6;pl.sight=8;const r=mesh(new THREE.RingGeometry(.9,1,64).rotateX(-PI/2),glow(0x60d0ff,3,.8),false);r.position.set(pl.pos.x,pl.pos.y+.3,pl.pos.z);fx(r,1,(o,k)=>{o.scale.setScalar(1+k*40);o.material.opacity=.8*(1-k)})}
-function hurtP(d,force,src,blk){if(pl.dead)return;if(!force&&blk&&pl.parry>0)return parried(src);if(!force&&(pl.inv>0||pl.barrier>0))return;let k=stance().guard||1;if(pl.fs)k*=.6;if(S.house==1)k*=.85;pl.hp-=d*k;pl.inv=.35;shake(.3);
+function hurtP(d,force,src,blk){if(pl.dead)return;if(!force&&blk&&pl.parry>0)return parried(src);if(!force&&(pl.inv>0||pl.barrier>0))return;let k=(stance().guard||1)*(1-.04*tr('hide'))*(W.dsc||1);if(pl.fs)k*=.6;if(S.house==1)k*=.85;pl.hp-=d*k;pl.inv=.35;sfx('hurt');shake(.3);
  document.body.classList.add('hurt');setTimeout(()=>document.body.classList.remove('hurt'),180);emit(new V3(pl.pos.x,pl.pos.y+1,pl.pos.z),15,{c:[2,.2,.2],spd:4,life:.4});if(pl.hp<=0)die()}
 const atkMul=()=>(inZone(pl.pos)?.5:1)*(W.boss?.t=='kronos'&&W.boss.phase2?.8:1);
-function attack(heavy){if(pl.dodge>0||pl.grap)return;if(pl.atk){pl.buf=heavy?2:1;return}const s=stance(),cost=heavy?18:5;if(pl.st<cost)return;pl.st-=cost;
+function attack(heavy){if(pl.dodge>0||pl.grap)return;if(pl.atk){pl.buf=heavy?2:1;return}const s=stance(),cost=heavy?18:5;if(pl.st<cost)return;pl.st-=cost;sfx(heavy?'heavy':'swing');
  let best=null,bd=s.rng+4;for(const e of W.enemies){if(e.dead)continue;const d=Math.hypot(e.pos.x-pl.pos.x,e.pos.z-pl.pos.z)-e.r;
   if(d<bd&&Math.abs(angD(Math.atan2(e.pos.x-pl.pos.x,e.pos.z-pl.pos.z),cam.yaw))<1.4){bd=d;best=e}}
  pl.face=best?Math.atan2(best.pos.x-pl.pos.x,best.pos.z-pl.pos.z):cam.yaw;
@@ -393,7 +426,7 @@ function updPlayer(dt){const p=pl,g=W.grav,sl=inZone(p.pos)?.5:1;p.inv-=dt;p.gcd
    else{p.vel.copy(to.normalize()).multiplyScalar(8);p.vel.y=Math.max(p.vel.y*g,8)*g}p.grap=null;p.air=1;tether.visible=false}
   else{p.vel.copy(to.normalize()).multiplyScalar(32);p.face=Math.atan2(to.x,to.z)}}
  else if(p.dodge>0){p.dodge-=dt;p.vel.set(p.dd.x,0,p.dd.z);if(S.dash)emit(new V3(p.pos.x,p.pos.y+1*g,p.pos.z),3,{c:[.4,1.2,2.5],spd:1,life:.5,g:0,size:.25})}
- else{const sp=(spr?10.5:6.5)*sl*(p.atk?.3:1)*(S.house==2?1.1:1),a=1-Math.exp(-(p.onGround?14:4)*dt);p.vel.x=lerp(p.vel.x,mv.x*sp,a);p.vel.z=lerp(p.vel.z,mv.z*sp,a);p.vel.y=clamp(p.vel.y-26*g*dt,-32,32)}
+ else{const sp=(spr?10.5:6.5)*sl*(p.atk?.3:1)*(S.house==2?1.1:1)*(1+.04*tr('wind')),a=1-Math.exp(-(p.onGround?14:4)*dt);p.vel.x=lerp(p.vel.x,mv.x*sp,a);p.vel.z=lerp(p.vel.z,mv.z*sp,a);p.vel.y=clamp(p.vel.y-26*g*dt,-32,32)}
  p.pos.addScaledVector(p.vel,dt);collide(p,.42,1.8);
  if(p.onGround){p.air=1;if(g>0&&(p.safeT-=dt)<=0){p.safe.copy(p.pos);p.safeT=.5}}
  if(p.pos.y<W.killY||p.pos.y>60){hurtP(12,1);emit(p.pos,40,{c:[1,1,2],spd:5});p.pos.copy(p.safe);p.vel.set(0,0,0);p.grap=null;tether.visible=false}
@@ -416,51 +449,96 @@ function updPlayer(dt){const p=pl,g=W.grav,sl=inZone(p.pos)?.5:1;p.inv-=dt;p.gcd
  PH.g.visible=!(p.inv>0&&p.dodge<=0&&!p.grap&&Math.floor(W.time*30)%2)}
 // actions
 function jump(){if(pl.onGround){pl.vel.y=10*W.grav;pl.onGround=false}else if(S.post&&!pl.grap){pl.vel.y=9*W.grav;emit(pl.pos,20,{c:[2,1.6,.6],spd:3})}}
-function dodge(){const p=pl;if(p.dodge>0||p.grap||p.st<18)return;const air=!p.onGround;if(air&&!S.dash&&!S.post)return;if(air&&p.air<=0&&!S.post)return;if(air)p.air--;
+function dodge(){const p=pl;if(p.dodge>0||p.grap||p.st<18)return;const air=!p.onGround;if(air&&!S.dash&&!S.post)return;if(air&&p.air<=0&&!S.post)return;sfx('dodge');if(air)p.air--;
  let d=inputDir();if(!d.lengthSq())d.set(Math.sin(p.face),0,Math.cos(p.face));p.dodge=S.dash?.3:.28;p.dd.copy(d).multiplyScalar(S.dash?24:15);p.inv=S.dash?.45:.32;p.st-=18;p.atk=null;p.face=Math.atan2(d.x,d.z)}
 function spark(){if(!S.spark)return;if(S.miasma){toast('The Miasma smothers your Spark…');return}if(pl.sp<25)return;pl.sp-=25;const cf=camera.getWorldDirection(new V3()),o=PH.hand.getWorldPosition(new V3());
- shoot(o,camera.position.clone().addScaledVector(cf,60).sub(o).normalize(),{spd:36,col:wcol(),pc:colA(wcol(),2),dmg:40*(S.unified?1.5:1)*S.atk*(S.house==0?1.15:1),aoe:3.5,pl:1,sz:1.5});emit(o,20,{c:colA(wcol(),3),spd:4,life:.3})}
+ shoot(o,camera.position.clone().addScaledVector(cf,60).sub(o).normalize(),{spd:36,col:wcol(),pc:colA(wcol(),2),dmg:40*(S.unified?1.5:1)*S.atk*(S.house==0?1.15:1),aoe:3.5,pl:1,sz:1.5});emit(o,20,{c:colA(wcol(),3),spd:4,life:.3});sfx('blast')}
 function grapple(){if(!S.grapple||pl.grap)return;const t=grapTarget();if(t)startGrapple(t)}
 function stanceSw(){if(WEAP[S.weapon].st.length<2)return;S.stance^=1;buildWeapon();toast(stance().n);emit(new V3(pl.pos.x,pl.pos.y+1,pl.pos.z),40,{c:colA(wcol(),3),spd:4,life:.4})}
 function interact(){let b=null,bd=2.8;for(const i of W.inter){const d=Math.hypot(i.p.x-pl.pos.x,i.p.z-pl.pos.z);if(d<bd&&Math.abs(i.p.y-pl.pos.y)<3){bd=d;b=i}}
- if(!b)return;if(b.keep)return b.fn();W.inter.splice(W.inter.indexOf(b),1);if(b.o)W.grp.remove(b.o);b.r()}
-function god(){if(pl.meter<100)return;pl.meter=0;pop(S.align=='athena'?'AEGIS BARRIER':S.align=='ares'?'PLASMA ERUPTION':'PRIMORDIAL SURGE');if(S.align!='athena'){const c=new V3(pl.pos.x,pl.pos.y+.5,pl.pos.z);emit(c,250,{c:[3,1,.3],spd:14,up:3,life:1,size:.5});shake(.9);hitstop=.1;
+ if(!b)return;sfx('chime');if(b.keep)return b.fn();W.inter.splice(W.inter.indexOf(b),1);if(b.o)W.grp.remove(b.o);b.r()}
+function god(){if(pl.meter<100)return;pl.meter=0;sfx('power');pop(S.align=='athena'?'AEGIS BARRIER':S.align=='ares'?'PLASMA ERUPTION':'PRIMORDIAL SURGE');if(S.align!='athena'){const c=new V3(pl.pos.x,pl.pos.y+.5,pl.pos.z);emit(c,250,{c:[3,1,.3],spd:14,up:3,life:1,size:.5});shake(.9);hitstop=.1;
   const r=mesh(new THREE.RingGeometry(.5,1,48).rotateX(-PI/2),glow(0xff6020,4,.9),false);r.position.copy(c);fx(r,.5,(o,k)=>{o.scale.setScalar(1+k*9);o.material.opacity=.9*(1-k)});
   for(const e of W.enemies)if(!e.dead&&e.pos.distanceTo(pl.pos)<9+e.r)hurtE(e,90*S.atk,8,2)}else{pl.barrier=5;toast('Aegis Barrier — invulnerable & reflecting!')}}
-function potion(){if(S.potions<1||pl.hp>=S.maxHp)return;S.potions--;pl.hp=Math.min(S.maxHp,pl.hp+60);emit(pl.pos,60,{c:[.4,2.5,.6],spd:2,up:2,life:1})}
+function potion(){if(S.potions<1||pl.hp>=S.maxHp)return;S.potions--;sfx('chime');pl.hp=Math.min(S.maxHp,pl.hp+60);emit(pl.pos,60,{c:[.4,2.5,.6],spd:2,up:2,life:1})}
 
 // ================= camera =================
-const cam={yaw:PI,pitch:.3,dist:6.5,shake:0,pos:new V3()};let hitstop=0;const shake=k=>cam.shake=Math.max(cam.shake,k);
-function updCam(dt){const g=W.grav||1,tgt=new V3(pl.pos.x,pl.pos.y+1.6*g,pl.pos.z),cp=Math.cos(cam.pitch),f=new V3(Math.sin(cam.yaw)*cp,-Math.sin(cam.pitch)*g,Math.cos(cam.yaw)*cp),
- r=new V3(-Math.cos(cam.yaw),0,Math.sin(cam.yaw)),want=tgt.clone().addScaledVector(f,-cam.dist).addScaledVector(r,.7);
+const cam={yaw:PI,pitch:.3,dist:6.5,shake:0,roll:0,pos:new V3()};let hitstop=0;const shake=k=>cam.shake=Math.max(cam.shake,k);
+function updCam(dt){const g=W.grav||1;cam.roll=lerp(cam.roll||0,g<0?PI:0,1-Math.exp(-dt*5));const iv=Math.cos(cam.roll)<0?-1:1,tgt=new V3(pl.pos.x,pl.pos.y+1.6*g,pl.pos.z),cp=Math.cos(cam.pitch),f=new V3(Math.sin(cam.yaw)*cp,-Math.sin(cam.pitch)*g,Math.cos(cam.yaw)*cp),
+ r=new V3(-Math.cos(cam.yaw),0,Math.sin(cam.yaw)),want=tgt.clone().addScaledVector(f,-cam.dist).addScaledVector(r,.7*iv);
  if(g>0){const gy=groundAt(want.x,want.z,want.y+2);if(want.y<gy+.4)want.y=gy+.4}
  cam.pos.lerp(want,1-Math.exp(-dt*14));camera.position.copy(cam.pos);if(cam.shake>.01){camera.position.x+=rand(-1,1)*cam.shake*.3;camera.position.y+=rand(-1,1)*cam.shake*.3}
- cam.shake*=Math.exp(-dt*7);camera.lookAt(tgt.addScaledVector(r,.7).addScaledVector(f,8))}
+ cam.shake*=Math.exp(-dt*7);camera.up.set(0,Math.cos(cam.roll),0).addScaledVector(r,Math.sin(cam.roll));camera.lookAt(tgt.addScaledVector(r,.7*iv).addScaledVector(f,8))}
 
 // ================= script helpers =================
 let RUN=0,mode='menu',lockT=0;
 const pend=setup=>{const id=RUN;return new Promise(r=>setup(v=>{if(id===RUN)r(v)}))};
 const until=c=>pend(r=>W.waiters.push({c,r})),wait=s=>{const t=W.time+s;return until(()=>W.time>=t)},killAll=l=>until(()=>l.every(e=>e.dead));
 const inter=(p,label,o,opt)=>pend(r=>W.inter.push({p,label,o,r,opt}));
-const ui=Object.fromEntries(['hud','hp','st','sp','info','keys','obj','boss','bossN','bossHp','prompt','gm','toasts','dlg','dlgS','dlgT','modal','card','fade','flash','menu','hub','pause','dead','pop','compass','mtr','xp','creator'].map(k=>[k,$(k)]));
+const ui=Object.fromEntries(['hud','hp','st','sp','info','keys','obj','boss','bossN','bossHp','prompt','gm','toasts','dlg','dlgS','dlgT','modal','card','fade','flash','menu','hub','pause','dead','pop','compass','mtr','xp','creator','ban'].map(k=>[k,$(k)]));
 const obj=t=>ui.obj.textContent=t,toast=t=>{const d=document.createElement('div');d.className='t';d.innerHTML=t.replace(/[<>&]/g,'').replace(/\[(\w+)\]/g,'<span class=kb>$1</span>');ui.toasts.appendChild(d);setTimeout(()=>d.remove(),6000)},tip=t=>toast(t),pop=t=>{ui.pop.textContent=t;ui.pop.classList.remove('show');void ui.pop.offsetWidth;ui.pop.classList.add('show')};
 const fade=v=>pend(r=>{ui.fade.style.opacity=v;setTimeout(r,700)});
-function flash(){ui.flash.animate([{opacity:.9},{opacity:0}],{duration:600})}
+// ================= audio: everything is synthesised, no sound files =================
+let AC=null,SG,MU,RV,NB;const AU={on:true,last:{}};try{AU.on=localStorage.getItem('titano_mute')!='1'}catch(e){}
+function audio(){if(AC){if(AC.state=='suspended')AC.resume();return}try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return}
+ const MG=AC.createGain();MG.gain.value=AU.on?.8:0;MG.connect(AC.destination);AU.mg=MG;SG=AC.createGain();SG.gain.value=.5;SG.connect(MG);MU=AC.createGain();MU.gain.value=.2;MU.connect(MG);
+ const n=AC.sampleRate;NB=AC.createBuffer(1,n,n);const d=NB.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+ RV=AC.createConvolver();const L=n*2.6|0,ir=AC.createBuffer(2,L,n);for(let c=0;c<2;c++){const x=ir.getChannelData(c);for(let i=0;i<L;i++)x[i]=(Math.random()*2-1)*(1-i/L)**3}RV.buffer=ir;
+ const rg=AC.createGain();rg.gain.value=.4;RV.connect(rg);rg.connect(MG);setInterval(music,100)}
+function tone(f,t,d,{type='sine',v=.3,f2,at=.005,dst=SG,rv=0}={}){const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);
+ g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+at);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g);g.connect(dst);if(rv){const r=AC.createGain();r.gain.value=rv;g.connect(r);r.connect(RV)}o.start(t);o.stop(t+d+.05)}
+function nz(t,d,{v=.3,f=1000,f2,q=1,type='bandpass',dst=SG}={}){const s=AC.createBufferSource(),fl=AC.createBiquadFilter(),g=AC.createGain();s.buffer=NB;fl.type=type;fl.Q.value=q;fl.frequency.setValueAtTime(f,t);
+ if(f2)fl.frequency.exponentialRampToValueAtTime(f2,t+d);g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);s.connect(fl);fl.connect(g);g.connect(dst);s.start(t,Math.random()*.5);s.stop(t+d+.05)}
+const SFX={swing:t=>nz(t,.16,{v:.22,f:700,f2:2600,q:2}),heavy:t=>nz(t,.3,{v:.32,f:300,f2:1600,q:1.5}),
+ hit:t=>{tone(170,t,.14,{type:'triangle',v:.45,f2:60});nz(t,.07,{v:.25,f:2500,q:.8})},
+ parry:t=>{for(const f of[1320,1980,2640])tone(f,t,.7,{v:.1,rv:.8});nz(t,.05,{v:.35,f:5000})},
+ hurt:t=>{tone(110,t,.25,{type:'sawtooth',v:.2,f2:50});nz(t,.12,{v:.25,f:700})},
+ blast:t=>{tone(260,t,.4,{type:'sawtooth',v:.12,f2:1100});nz(t,.35,{v:.2,f:900,f2:4000})},
+ boom:t=>{tone(75,t,1.4,{v:.7,f2:28});nz(t,1.2,{v:.45,f:500,f2:60,type:'lowpass'});[0,3,7].forEach((k,i)=>tone(196*2**(k/12),t+.3+i*.12,1.6,{v:.08,type:'triangle',rv:1}))},
+ dodge:t=>nz(t,.25,{v:.18,f:400,f2:1300,q:.7}),kill:t=>tone(240,t,.25,{type:'triangle',v:.16,f2:90}),
+ portal:t=>{[0,4,7,12,16,19,24].forEach((k,i)=>tone(392*2**(k/12),t+i*.07,1,{v:.09,type:'triangle',rv:1}));nz(t,1.3,{v:.12,f:1500,f2:8000})},
+ level:t=>[0,4,7,12].forEach((k,i)=>tone(523*2**(k/12),t+i*.1,1.1,{v:.12,type:'triangle',rv:1})),
+ chime:t=>{tone(1046,t,.6,{v:.1,rv:1});tone(1568,t+.08,.6,{v:.08,rv:1})},click:t=>tone(1100,t,.04,{v:.05,type:'square'}),
+ death:t=>[0,-3,-7,-12].forEach((k,i)=>tone(220*2**(k/12),t+i*.28,1,{v:.12,type:'sawtooth'})),
+ rift:t=>{tone(60,t,1.5,{type:'sawtooth',v:.12,f2:110});nz(t,1.2,{v:.15,f:200,f2:900})},power:t=>{tone(110,t,1,{type:'sawtooth',v:.2,f2:440});nz(t,.8,{v:.3,f:300,f2:5000})}};
+function sfx(n){if(!AC||!AU.on)return;const t=AC.currentTime;if(t-(AU.last[n]||0)<.04)return;AU.last[n]=t;SFX[n](t)}
+// adaptive score: a lyre walks the level's mode over a drone; drums join when a fight is on
+const MODES={dor:[0,2,3,5,7,9,10],phr:[0,1,3,5,7,8,10],lyd:[0,2,4,6,7,9,11],aeo:[0,2,3,5,7,8,10]},MOOD=[['phr',130.8],['dor',146.8],['lyd',164.8],['phr',138.6],['aeo',123.5],['phr',116.5],['dor',155.6],['lyd',146.8],['phr',130.8],['phr',110],['lyd',174.6],['aeo',110]];
+const mus={next:0,st:0,deg:7,mood:['dor',146.8]};
+function music(){if(!AC||AC.state!='running')return;const t0=AC.currentTime;if(mus.next<t0)mus.next=t0+.05;
+ while(mus.next<t0+.35){const t=mus.next,st=mus.st++,[md,root]=mode=='play'||mode=='dlg'?MOOD[W.idx]||mus.mood:['dor',146.8],sc=MODES[md],
+  fight=mode=='play'&&(W.boss&&W.boss.state!='guard'||W.enemies.some(e=>!e.dead&&!e.T.st&&e.state!='guard'&&e.pos.distanceTo(pl.pos)<24)),beat=fight?.19:.34,F=k=>root*2**((sc[(k%7+7)%7]+12*Math.floor(k/7))/12);
+  if(st%16==0)for(const k of[0,4]){const o=AC.createOscillator(),g=AC.createGain(),fl=AC.createBiquadFilter();o.type='sawtooth';o.frequency.value=F(k)/2;o.detune.value=rand(-8,8);fl.type='lowpass';fl.frequency.value=fight?900:500;
+   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.09,t+beat*4);g.gain.linearRampToValueAtTime(0,t+beat*16.5);o.connect(fl);fl.connect(g);g.connect(MU);o.start(t);o.stop(t+beat*17)}
+  if(Math.random()<(fight?.85:.55)){mus.deg=clamp(mus.deg+pick([-2,-1,-1,1,1,2,3,-3]),3,13);tone(F(mus.deg)*2,t,fight?.5:1.2,{type:'triangle',v:.13,dst:MU,rv:.5})}
+  if(fight&&st%4==0){tone(st%8?120:90,t,.3,{v:.5,f2:45,dst:MU});nz(t,.08,{v:.12,f:3000,dst:MU})}if(fight&&st%4==2)nz(t,.05,{v:.07,f:6000,dst:MU})
+  mus.next+=beat}}
+function mute(){AU.on=!AU.on;try{localStorage.setItem('titano_mute',AU.on?'0':'1')}catch(e){}if(AU.mg)AU.mg.gain.value=AU.on?.8:0;toast(AU.on?'Sound on · [M] to mute':'Sound muted · [M] to unmute')}
+addEventListener('pointerdown',audio);addEventListener('keydown',audio);
+function banner(t,sub=''){sfx(t=='VANQUISHED'?'chime':t.startsWith('LEVEL')?'level':'chime');const b=ui.ban;b.innerHTML=`<h1>${t}</h1><small>${sub}</small>`;b.classList.remove('show');void b.offsetWidth;b.classList.add('show')}
+// big moments get slow motion, a shockwave and a banner
+let slow=0;function bossDeath(e){S.stat.b++;sfx('boom');slow=1.8;shake(1.2);const c=ec(e);emit(c,300,{c:[3,2.2,.8],spd:14,life:1.6,size:.45});
+ const ring=add(mesh(new THREE.RingGeometry(.8,1.2,64).rotateX(-PI/2),glow(0xffc060,3,.9),false),c.x,e.pos.y+.2,c.z);fx(ring,1.4,(o,k)=>{o.scale.setScalar(1+k*30);o.material.opacity=.9*(1-k)});
+ setTimeout(()=>banner('VANQUISHED',e.T.boss),350)}
+function flash(){ui.flash.animate([{opacity:.35},{opacity:0}],{duration:500})}
 const lock=()=>{lockT=performance.now();try{renderer.domElement.requestPointerLock()?.catch?.(()=>{})}catch(e){}};
 const D={q:[],r:null};
-function say(lines){return pend(r=>{D.q=lines.slice();D.r=r;mode='dlg';ui.dlg.style.display='block';nextLine()})}
-function nextLine(){const l=D.q.shift();if(!l){ui.dlg.style.display='none';mode='play';if(!document.pointerLockElement)lock();const r=D.r;D.r=null;r?.();return}
+function say(lines){return pend(r=>{D.q=lines.slice();D.r=r;mode='dlg';ui.dlg.style.display='block';nextLine(1)})}
+function nextLine(force){if(!force&&performance.now()-(D.at||0)<450)return;D.at=performance.now();const l=D.q.shift();if(!l){ui.dlg.style.display='none';mode='play';if(!document.pointerLockElement)lock();const r=D.r;D.r=null;r?.();return}
  ui.dlgS.textContent=l[0];ui.dlgT.textContent=l[1];ui.dlgT.style.animation='none';ui.dlgT.offsetWidth;ui.dlgT.style.animation='';ui.dlg.classList.toggle('narr',!l[0])}
 function choose(title,text,opts){return pend(r=>{mode='modal';document.exitPointerLock();
  ui.modal.innerHTML=`<h2>${title}</h2><p>${text}</p><div class=opts>${opts.map((o,i)=>`<button data-i=${i}><b>${i+1}. ${o[0]}</b><span>${o[1]}</span></button>`).join('')}</div>`;
- ui.modal.style.display='flex';ui.modal.onclick=ev=>{const b=ev.target.closest('button');if(!b)return;ui.modal.style.display='none';mode='play';lock();r(+b.dataset.i)}})}
+ ui.modal.style.display='flex';arm(ui.modal);ui.modal.onclick=ev=>{const b=ev.target.closest('button');if(!b)return;ui.modal.style.display='none';mode='play';lock();r(+b.dataset.i)}})}
 function portal(x,y,z){const g=new THREE.Group();g.add(mesh(new THREE.TorusGeometry(1.6,.12,12,48),glow(0x80c0ff,4),false),mesh(new THREE.CircleGeometry(1.55,40),glow(0x4080ff,1.2,.5),false));
  add(g,x,y+1.9,z);g.userData.face=1;W.spin.push(g);W.emitters.push({p:g.position,rate:40,o:{c:[.6,1,3],spd:1.5,g:0,life:1,r:1.2,size:.2}});
  return until(()=>Math.hypot(pl.pos.x-x,pl.pos.z-z)<2.2&&Math.abs(pl.pos.y-y)<3).then(complete)}
 function npc(x,z,o,flame){const H=humanoid(o);add(H.g,x,Math.max(groundAt(x,z,60),0),z);H.g.rotation.y=Math.atan2(-x,-z);
- if(flame)W.emitters.push({p:new V3(x,H.g.position.y+2.0*(o.s||1),z),rate:25,o:{c:colA(flame,2.5),up:2,g:1,spd:.5,life:.6,size:.3,r:.12}});return H}
+ if(flame)W.emitters.push(H.em={p:new V3(x,H.g.position.y+2.0*(o.s||1),z),rate:25,o:{c:colA(flame,2.5),up:2,g:1,spd:.5,life:.6,size:.3,r:.12}});return H}
 function ichor(x,y,z){if(!S.nymphs||S.sh.includes(W.idx))return;const o=add(mesh(new THREE.OctahedronGeometry(.35),glow(0xffd060,3),false),x,y+1.2,z);W.spin.push(o);
  inter(new V3(x,y,z),'Take Ichor Shard',o,1).then(()=>{S.sh.push(W.idx);S.maxHp+=10;pl.hp+=10;toast('Ichor Shard — +10 Max HP')})}
+function door(x,z,m){const g=add(new THREE.Group(),x,Math.max(groundAt(x,z,60),0),z);g.rotation.y=Math.atan2(-x,-z);
+ for(const s of[-1.7,1.7]){const p=mesh(boxGeo(.6,4,.8),m);p.position.set(s,2,0);g.add(p)}const l=mesh(boxGeo(4,.6,.9),m);l.position.y=4.1;g.add(l);
+ const v=mesh(new THREE.PlaneGeometry(2.8,3.8),new THREE.MeshBasicMaterial({color:0x020101}));v.position.set(0,1.9,-.3);g.add(v);return g}
 const isle=(x,z,r)=>{cyl(x,-4,z,r,8,mat(0x5a5448),true,32,r*.7);cyl(x,.03,z,r*.97,.06,mat(0x4a6a38),false,32);for(let i=0;i<4;i++){const a=rand(0,TAU);rock(x+Math.cos(a)*r*.8,.2,z+Math.sin(a)*r*.8,rand(.4,1),mat(0x6a6458))}};
 
 // ================= levels =================
@@ -480,8 +558,10 @@ async run(){for(let i=0;i<6;i++){const a=i/6*TAU+.3;torch(Math.cos(a)*22,Math.si
  const cz=-20,bars=[];block(0,1.6,cz-2.5,8.5,3.2,.5,iron);for(const x of[-4.2,4.2])block(x,1.6,cz,.4,3.2,5,iron);block(0,3.3,cz,8.6,.3,5.4,iron);
  for(let i=0;i<9;i++)bars.push(cyl(-4+i,1.6,cz+2.3,.07,3.2,iron,false,6));const cageCol={x0:-4.2,x1:4.2,z0:cz+2.1,z1:cz+2.5,bot:0,top:3.2};W.cols.push(cageCol);
  const kids=[-2,0,2].map(x=>npc(x,cz,{s:.55,cloth:0x5a4a3a,skin:0xc08a68,hs:x?1:3}));kids.forEach(k=>k.g.rotation.y=0);
- player(0,12);await fade(0);tip('[Q] dodge roll — invulnerable while rolling');tip('When a yellow ! flashes over a foe press [C] to parry and counter. Red ! — dodge!');obj('Survive the Vault Sentinels');
- await killAll([spawn('grunt',-6,-4),spawn('grunt',6,-4),spawn('grunt',0,-8)]);
+ door(-24,-6,iron);door(24,-6,iron);player(0,12);await fade(0);
+ await say([['','You crash onto the vault floor. Somewhere above, an alarm horn bellows.'],['Sentinel','(echoing from the tunnels) Something fell into the vault! Sentinels — seize it!']]);
+ tip('[Q] dodge roll — invulnerable while rolling');tip('When a yellow ! flashes over a foe press [C] to parry and counter. Red ! — dodge!');obj('Survive the Vault Sentinels');
+ const vs=[spawn('grunt',-6,-4,undefined,0,{from:[-24,-6]}),spawn('grunt',6,-4,undefined,0,{from:[24,-6]})];await wait(2.5);vs.push(spawn('grunt',0,-8,undefined,0,{from:[-24,-6]}));await killAll(vs);
  obj('Investigate the sealed cell');await inter(new V3(0,0,cz+3.5),'Inspect the cell');
  const c=await choose('Mortal Fates','Children of the trench huddle behind iron bars. A dead guard nearby clutches a glowing core. Above you, the tunnel is collapsing.',
   [['Path of Xenia','Pry open their cell. (+Xenia · a Mortal Merchant joins your hub and sells cheaper potions)'],['Path of Hubris','Leave them. Take the glowing core. (+Hubris · permanent +20% attack power)']]);
@@ -492,37 +572,45 @@ async run(){for(let i=0;i<6;i++){const a=i/6*TAU+.3;torch(Math.cos(a)*22,Math.si
 {act:'Act I · The Sparks of Rebellion',name:'Altar of Ignition',th:{bg:0x080a12,fog:.03,hemi:[0x6080b0,0x080604,.5],sun:[0x8090ff,.3],env:.15,g1:0x1a1c24,g2:0x3a342c,R:32,wall:40,cave:1,amb:{c:[.5,.9,2.5],n:18,g:.2,life:4,size:.1,spd:.3}},
 async run(){for(let i=0;i<6;i++){const a=i/6*TAU;torch(Math.cos(a)*20,Math.sin(a)*20,0x4a80ff)}const st=mat(0x4a4a52,{r:.7}),mt=mat(0x202024,{m:.9,r:.3});
  cyl(0,.25,-6,3.2,.5,st);block(0,1,-6,1.4,1,.8,mt);block(0,1.65,-6,2.4,.3,1,mt);const rr=add(mesh(new THREE.TorusGeometry(2.8,.05,6,64).rotateX(PI/2),glow(0x60a0ff,3),false),0,.55,-6);
- for(let i=0;i<8;i++){const a=i/8*TAU+.2;column(Math.cos(a)*14,Math.sin(a)*14,9,st)}player(0,14);
- await say([['','A vault older than the Titans. At its heart, an anvil hums with a light that has no source.']]);
+ for(let i=0;i<8;i++){const a=i/8*TAU+.2;column(Math.cos(a)*14,Math.sin(a)*14,9,st)}
+ const hades=npc(10,-14,{cloth:0x14141e,skin:0xb0a8a0,hair:0x101010,robe:1,beard:1,hs:2},0x4060ff),hy=hades.g.rotation.y,rx=Math.cos(hy),rz=-Math.sin(hy),bonds=add(new THREE.Group());
+ hades.aL.rotation.z=-2.3;hades.aR.rotation.z=2.3;hades.head.rotation.x=.45;hades.g.position.y=-.12;hades.em.rate=6;
+ for(const k of[-1,1]){const px=10+rx*k*1.9,pz=-14+rz*k*1.9;cyl(px,1.7,pz,.22,3.4,mt,true,10)}
+ hades.g.updateMatrixWorld(true);for(const[k,h]of[[-1,hades.handL],[1,hades.hand]]){const a=h.getWorldPosition(new V3()),b=new V3(10+rx*k*1.9,3,-14+rz*k*1.9),n=Math.ceil(a.distanceTo(b)/.16);
+  for(let i=0;i<=n;i++){const l=mesh(new THREE.TorusGeometry(.07,.022,5,10),mt);l.position.lerpVectors(a,b,i/n);l.lookAt(b);l.rotation.z=i%2*PI/2;bonds.add(l)}}
+ const wardens=[spawn('grunt',7,-10,undefined,0,{guard:6,look:[10,-14]}),spawn('grunt',13.5,-11,undefined,0,{guard:6,look:[10,-14]}),spawn('archer',7,-18,undefined,0,{guard:7,look:[10,-14]}),spawn('brute',13,-17.5,undefined,0,{guard:6,look:[10,-14]})];
+ player(0,14);
+ await say([['','A vault older than the Titans. At its heart, an anvil hums with a light that has no source.'],['','Beyond it, a hooded prisoner hangs in Stygian chains while Titan Wardens stand watch.'],['Warden','Still silent, son of Kronos? Your father has all the time in the world.']]);
+ tip('Sneak past the Wardens — they react if you get close');
  obj('Touch the primordial anvil');await inter(new V3(0,0,-4.4),'Touch the anvil');
  S.spark=true;buildPlayer();shake(1.2);flash();emit(new V3(0,1.8,-6),300,{c:[1,2,4],spd:10,life:1.4,size:.4});rr.material.color.set(0xffffff).multiplyScalar(5);
  await say([['???','…a spark from before Time. It has chosen you.'],['','Cosmic fire floods your veins. THE FIRST SPARK is awake.']]);
  tip('[F] Spark Blast — aim with the camera');tip('[T] Spark Sight — reveal secrets and foes nearby');tip('Fighting fills the gold meter — [X] unleashes a Primordial Surge');
- const hades=npc(10,-14,{cloth:0x14141e,skin:0xb0a8a0,hair:0x101010,robe:1,beard:1,hs:2},0x4060ff);
- await say([['Hades','You — mortal! If that light is what I think it is… USE IT!']]);obj('Save the hooded god from the Titan Wardens');
- await killAll([spawn('grunt',6,-8),spawn('grunt',14,-6),spawn('archer',4,-18),spawn('brute',12,-18)]);
- await say([['Hades','Hades, eldest son of Kronos. And you… you are the prophecy my father fears.'],['Hades','Hold still—']]);
+ await say([['Warden','The anvil! Something touched the anvil!'],['Hades','(rattling his chains) You — mortal! If that light is what I think it is… USE IT!']]);wake(wardens);obj('Defeat the Titan Wardens');
+ await killAll(wardens);obj('Break Hades’ chains');await inter(new V3(10+Math.sin(hy)*1.2,0,-14+Math.cos(hy)*1.2),'Break the chains');
+ W.grp.remove(bonds);emit(new V3(10,2.4,-14),120,{c:[1,1.6,3],spd:7,life:.8});shake(.6);hades.aL.rotation.z=-.1;hades.aR.rotation.z=.1;hades.head.rotation.x=0;hades.g.position.y=0;hades.em.rate=25;
+ await say([['Hades','(rubbing his wrists) Hades, eldest son of Kronos. And you… you are the prophecy my father fears.'],['Hades','Hold still—']]);
  await fade(1);W.lights.forEach(L=>L.color.set(0xffb060));W.emitters.forEach(e=>e.o.c=[2.5,1.2,.4]);scene.fog.color.set(0x140c06);scene.background.set(0x140c06);
- hades.g.position.set(5,0,4);W.emitters.at(-1).p.set(5,2.4,4);npc(-5,4,{cloth:0xe8e0d0,hair:0xdadada,robe:1,beard:1.5,hs:2},0x80c0ff);player(0,12);await fade(0);
+ hades.g.position.set(5,0,4);hades.em.p.set(5,2.4,4);npc(-5,4,{cloth:0xe8e0d0,hair:0xdadada,robe:1,beard:1.5,hs:2},0x80c0ff);player(0,12);await fade(0);
  await say([['','The OLYMPUS BUNKER — a war-camp hidden inside a storm.'],['Zeus',`Swear it, ${S.name} of the ${HOUSES[S.house].n.slice(9)}. Swear your fire to the rebellion.`],['You','I swear it.'],['Hades','Then the forge is yours. Choose — it will carry your Spark to the end of Time.']]);
  const w=await choose('The Forge','Choose your signature weapon. Each has two stances — switch any time with R.',[
   ['Aetheric Dodecahedron Staff','Sword Stance: rapid energy-blade thrusts. Whip Stance: long laser tethers that slice whole groups.'],
   ['Aegis Sektor','Shield Stance: hard-light tower shield (−50% damage taken). Axe Stance: heavy shield-shattering armor damage.'],
   ['Stygian Claws','Dagger Stance: ultra-fast dual slashes. Dart Stance: long-range rope-dart — heavy attack pulls you to the target.']]);
  S.weapon=['staff','aegis','claws'][w];S.stance=0;buildWeapon();tip('[R] switch weapon stance');shake(.8);
- await say([['Hades','The IRON WARDEN followed my shadow-path! Show it what you are!']]);
- const b=spawn('warden',0,-16);obj('Defeat THE IRON WARDEN');await killAll([b]);
+ rift(0,-20,0x6a20ff,4);await wait(.7);await say([['Hades','A tear in my shadow-path… the IRON WARDEN followed us! Show it what you are!']]);
+ const b=spawn('warden',0,-15,undefined,0,{from:[0,-20]});obj('Defeat THE IRON WARDEN');await killAll([b]);
  await say([['Zeus','The Warden falls! Every chained mortal on Othrys will hear of this.']]);obj('Enter the rift');await portal(0,0,-8)}},
 {act:'Act II · The Elemental Forges',name:'Tempest Bastion',th:{bg:0x7a8a98,fog:.011,hemi:[0xa0b8d0,0x203040,.9],sun:[0xe0ecff,1.8],sky:{e:14,a:200,t:10,r:2},env:.7,g1:0x3a4a3a,g2:0x6a6a58,R:110,wall:60,fy:-12,floor:0,killY:-1.2,water:1,amb:{c:[.7,.9,1.2],n:25,g:-1,life:3,size:.07,spd:2}},
 async run(){isle(0,0,12);isle(0,-32,14);block(0,-.5,-15,4,1,8,mat(0x5a4030));isle(0,-62,6);isle(24,-60,5);isle(0,-90,9);
  for(const[x,z]of[[14,-20],[-15,-48],[12,-78],[-13,-80]]){const t=add(mesh(new THREE.TorusGeometry(3,.25,8,48).rotateX(PI/2),glow(0xc0f0ff,1.5,.35),false),x,-.5,z);W.spin.push(t);W.emitters.push({p:t.position,rate:15,o:{c:[.8,1,1.3],spd:2,g:0,life:1,r:2.5,size:.25}})}
  for(let i=0;i<5;i++){const s=add(new THREE.Group(),rand(-60,60),-.6,rand(-130,-100));s.add(mesh(boxGeo(2,1,7),mat(0x3a2a18)),mesh(boxGeo(.15,5,.15),mat(0x3a2a18)));s.children[1].position.y=2.5}
- anchor(0,6,-49);anchor(0,6,-77);anchor(12,6,-57);player(0,6);
+ anchor(0,6,-49);anchor(0,6,-77);anchor(12,6,-57);const G={guard:13,look:[0,0]},GB=[spawn('general',0,-38,undefined,0,G),spawn('grunt',-5,-30,undefined,0,G),spawn('grunt',5,-30,undefined,0,G),spawn('archer',-8,-40,undefined,0,G),spawn('archer',8,-42,undefined,0,G)];player(0,6);
  await say([['Zeus','Oceanus has caged Poseidon’s fleet behind living whirlpools.'],['Zeus','His Elite General holds the bastion. Break him, and your weapon will drink the fury of the sea.']]);
  let nym=0;for(const[x,z]of[[6,4],[-9,-38],[24,-60]]){const o=add(mesh(new THREE.SphereGeometry(.35,16,12),glow(0x60e0ff,3),false),x,1.2,z);W.emitters.push({p:o.position,obj:o,rate:12,o:{c:[.5,1.5,2.5],spd:.6,g:.5,life:1,size:.2}});
   inter(new V3(x,0,z),'Free the Nymph',o,1).then(()=>{nym++;toast(`Nymph freed (${nym}/3)`);if(nym==3){S.nymphs=true;S.maxHp+=30;pl.hp=S.maxHp;toast('The Nymphs reveal hidden ICHOR SHARDS across the world! +30 Max HP')}})}
  tip('Side Quest: The Lost Nymphs of Arcadia — free 3 water spirits');obj('Defeat Oceanus’ Elite General');
- await killAll([spawn('general',0,-38),spawn('grunt',-5,-30),spawn('grunt',5,-30),spawn('archer',-8,-40),spawn('archer',8,-42)]);
+ await killAll(GB);
  S.dash=S.grapple=true;shake(.8);emit(new V3(pl.pos.x,1,pl.pos.z),200,{c:[.4,1.4,3],spd:8,life:1});
  await say([['','Seawater floods your weapon core. It drinks the tide.'],['','AQUATIC DASH and GRAPPLE HOOK unlocked.']]);
  tip('[Q] in mid-air — Aquatic Dash');tip('[G] grapple to the golden ring you aim at — or onto an enemy');
@@ -530,7 +618,7 @@ async run(){isle(0,0,12);isle(0,-32,14);block(0,-.5,-15,4,1,8,mat(0x5a4030));isl
 {act:'Act II · The Elemental Forges',name:'The Obsidian Crags',th:{bg:0x5a2414,fog:.015,hemi:[0xffa070,0x401008,.7],sun:[0xffb080,2.2],sky:{e:5,a:110,t:20,r:3},env:.5,exp:.95,g1:0x1a1210,g2:0x3a2a20,R:70,wall:45,fy:-3,floor:0,killY:-.2,lava:1,bloom:.9,amb:{c:[2,.7,.2],n:40,g:.8,life:3,size:.1,spd:.5}},
 async run(){const bas=mat(0x24201e,{r:.9}),plat=(x,z,w,top)=>block(x,top-1.5,z,w,3,w,bas),towers=[],eyes=[];plat(0,0,16,0);
  for(let k=0;k<3;k++){const a=k*TAU/3-PI/2,P=r=>[Math.cos(a)*r,Math.sin(a)*r];plat(...P(12.5),4,.4);if(k<2)plat(...P(19),4,.8);else{const[x,z]=P(18);anchor(x,6,z)}
-  plat(...P(27),10,1.2);towers.push(spawn('tower',...P(29.5)));if(k==0){spawn('grunt',...P(25));spawn('grunt',...P(26))}if(k==1){spawn('archer',...P(25));spawn('grunt',...P(26))}if(k==2)spawn('brute',...P(25));
+  plat(...P(27),10,1.2);towers.push(spawn('tower',...P(29.5)));const G={guard:10,look:[0,0]},Q=r=>[...P(r),undefined,0,G];if(k==0){spawn('grunt',...Q(25));spawn('grunt',...Q(26))}if(k==1){spawn('archer',...Q(25));spawn('grunt',...Q(26))}if(k==2)spawn('brute',...Q(25));
   const b=a+PI/3;eyes.push(spawn('eye',Math.cos(b)*20,Math.sin(b)*20,5.5))}
  for(let i=0;i<30;i++){const a=rand(0,TAU),r=rand(40,70);rock(Math.cos(a)*r,0,Math.sin(a)*r,rand(1,4),bas)}ichor(...[Math.cos(PI/6)*27,1.2,Math.sin(PI/6)*27]);player(0,4);
  await say([['Demeter','Hyperion’s solar lenses have burned my fields to glass. Shatter his towers!'],['Helios','…Psst. Spark-bearer. Kronos watches me through his spy-eyes. Blind them, and I’ll make your road to Othrys… cooler.']]);
@@ -543,19 +631,19 @@ async run(){const bas=mat(0x24201e,{r:.9}),plat=(x,z,w,top)=>block(x,top-1.5,z,w
 {act:'Act III · The Tartarus Jailbreak',name:'The Inverted Vaults',th:{bg:0x06040e,fog:.012,hemi:[0x8060d0,0x100820,.8],sun:[0xb0a0ff,1.3],env:.3,void:1,floor:0,killY:-30,bloom:.9,amb:{c:[.8,.5,2],n:30,g:0,life:3,size:.1,spd:.6}},
 async run(){const vs=mat(0x2a2638,{r:.8,m:.2}),rune=glow(0x9060ff,2.5);
  for(const[x,t,z,w,d]of[[0,0,0,12,12],[0,2,-16,8,8],[12,4,-27,6,6],[-12,5,-28,6,6],[0,7,-40,10,10],[16,9,-46,6,6],[26,11,-36,8,8],[-14,9,-46,6,6]]){block(x,t-1,z,w,2,d,vs);add(mesh(boxGeo(w*1.02,.08,d*1.02),rune,false),x,t-2,z)}
- block(0,23,-28,56,2,56,vs);for(let i=0;i<30;i++){const s=add(mesh(new THREE.ConeGeometry(rand(.3,.8),rand(1.5,4),6),glow(0x7040ff,1.5)),rand(-26,26),20.5,rand(-54,0));s.rotation.x=PI}
+ block(0,23,-28,56,2,56,vs);W.ceil=22;for(let i=0;i<30;i++){let x,z;do{x=rand(-27,27);z=rand(-55,-1)}while(Math.abs(x)<20&&z>-50&&z<-6);const h=rand(1,2.2),s=add(mesh(new THREE.ConeGeometry(rand(.3,.6),h,6),glow(0x7040ff,1.5)),x,22-h/2,z);s.rotation.x=PI}
  for(const p of[[6,7,-22],[-6,9,-36],[20,15,-42],[0,16,-28],[-14,15,-46]])anchor(...p);
  const py=[spawn('pylon',0,-42),spawn('pylon',26,-36),spawn('pylon',-10,-20,22)];py[2].root.rotation.z=PI;py[2].cy=-2.5;ichor(16,9,-46);player(0,4);
  W.gt=12;W.ht=3;W.tick=dt=>{W.gt-=dt;if(W.grav>0&&W.gt<2&&!W.warn){W.warn=1;toast('⚠ Gravity inverting!')}
   if(W.gt<=0){W.grav*=-1;W.gt=W.grav>0?12:8;W.warn=0;shake(.5);pl.vel.y=0;toast(W.grav<0?'Gravity inverted — walk the ceiling!':'Gravity restored!')}
-  if((W.ht-=dt)<=0&&W.enemies.filter(e=>!e.dead&&e.t=='harpy').length<5){W.ht=6;spawn('harpy',pl.pos.x+rand(-15,15),pl.pos.z+rand(-15,15),pl.pos.y+8*W.grav)}};
+  if((W.ht-=dt)<=0&&W.enemies.filter(e=>!e.dead&&e.t=='harpy').length<5){W.ht=6;const a=rand(0,TAU);spawn('harpy',pl.pos.x+Math.cos(a)*30,pl.pos.z+Math.sin(a)*30,clamp(pl.pos.y+5*W.grav,2,19));if(!W.hw){W.hw=1;toast('Harpies shriek in the dark above the vault!')}}};
  await say([['Hades','Tartarus. Down here, even gravity serves the Titans.'],['Hades','Three seal-pylons bind the Elder Giants. One hangs from the vault ceiling — wait for the inversion, or blast it from below.']]);
  await until(()=>{const n=py.filter(e=>e.dead).length;obj(`Shatter the seal-pylons — ${n}/3`);return n==3});
  W.tick=null;if(W.grav<0){W.grav=1;toast('Gravity restored!')}obj('Descend to the Warden’s Cage');await portal(0,7,-40)}},
 {act:'Act III · The Tartarus Jailbreak',name:'The Warden’s Cage',th:{bg:0x12040a,fog:.018,hemi:[0xd06070,0x200508,.7],sun:[0xff7080,1.5],env:.3,void:1,R:24,killY:-30,bloom:.9,amb:{c:[2,.3,.3],n:25,g:.6,life:3,size:.1,spd:.5}},
 async run(){arena(0x2a2024,0xff3030);for(let i=0;i<3;i++){const a=i/3*TAU+PI/2,H=humanoid({s:5,bulk:1.5,cloth:0x2a2a2a,skin:0x5a4a40,eye:0xff4020,beard:1.3,hs:4});add(H.g,Math.cos(a)*42,-6,Math.sin(a)*42);H.g.rotation.y=Math.atan2(-Math.cos(a),-Math.sin(a));H.hips.rotation.x=.4}
- player(0,14);await say([['Kampe','The Spark-bearer… the prophecy crawls into MY cage?'],['Kampe','I will unmake you thread by thread!']]);
- tip('Kampe is relentless up close — dodge her combos and punish the gaps.');const b=spawn('kampe',0,-10);b.H.wings.visible=false;obj('Defeat WARDEN KAMPE');await killAll([b]);
+ const b=spawn('kampe',0,-10,undefined,0,{guard:-1,look:[0,14]});b.H.wings.visible=false;player(0,14);await say([['Kampe','The Spark-bearer… the prophecy crawls into MY cage?'],['Kampe','I will unmake you thread by thread!']]);
+ tip('Kampe is relentless up close — dodge her combos and punish the gaps.');wake([b]);obj('Defeat WARDEN KAMPE');await killAll([b]);
  await say([['','Kampe shatters. The master chains scream — and break.'],['Kampe','(dying) You… freed them… but my poison… is already in your blood… MIASMA…'],['','Black ichor seeps into your veins. Your Spark gutters like a dying candle.'],['Giants','WE ARE FREE. WE WILL FORGE THE WEAPONS OF THE GODS.']]);
  S.miasma=true;buildPlayer();document.body.classList.add('miasma');toast('Cursed by MIASMA — Spark Blast sealed');obj('Enter the rift');await portal(0,0,0)}},
 {act:'Act IV · The Shadow of Miasma',name:'The Ash-Weeping Ascent',th:{bg:0x5a5652,fog:.018,hemi:[0xa0a0a8,0x302820,.8],sun:[0xd8d0c8,1.2],sky:{e:20,a:160,t:20,r:4},env:.5,g1:0x3a3632,g2:0x5a5450,R:60,wall:70,fy:-35,floor:0,killY:-12,amb:{c:[.7,.7,.7],n:60,g:-.6,life:5,size:.12,spd:.6}},
@@ -564,9 +652,9 @@ async run(){const rk=mat(0x4a4642,{r:.95}),col=(x,z,w,top)=>block(x,(top-40)/2,z
  for(let i=0;i<5;i++){const a=rand(0,TAU);rock(Math.cos(a)*5,19.5,Math.sin(a)*5,rand(.4,.9),rk)}
  ichor(L[9][0],15,L[9][1]);player(0,22);
  await say([['Athena','The Miasma devours your Spark. No blasts — only steel, dash and hook.'],['Athena','Climb to Hestia’s temple at the summit of Parnassus. Her hearth can burn the curse out.']]);
- const w1=[spawn('shade',...L[3]),spawn('shade',...L[4])],w2=[spawn('shade',...L[7]),spawn('shade',...L[8]),spawn('brute',...L[10])];
+ const G={guard:9},w1=[spawn('shade',...L[3],undefined,0,G),spawn('shade',...L[4],undefined,0,G)],w2=[spawn('shade',...L[7],undefined,0,G),spawn('shade',...L[8],undefined,0,G),spawn('brute',...L[10],undefined,0,G)];
  obj('Ascend Mount Parnassus');await until(()=>pl.pos.y>19&&Math.hypot(pl.pos.x,pl.pos.z)<7);
- obj('Defeat the shadow sentries');await killAll([...w1,...w2,spawn('shade',3,-3),spawn('shade',-3,-3),spawn('shade',0,4)]);
+ wake([...w1,...w2]);toast('Shades claw their way up out of the ash!');obj('Defeat the shadow sentries');await killAll([...w1,...w2,...[[3,-3],[-3,-3],[0,4]].map(([x,z])=>spawn('shade',x,z,undefined,0,{rise:1}))]);
  await say([['Athena','The temple stands just beyond the ash. Go.']]);obj('Enter the rift');await portal(0,19.5,0)}},
 {act:'Act IV · The Shadow of Miasma',name:'The Eternal Pyre',th:{bg:0x2a1e28,fog:.02,hemi:[0x7068a0,0x201810,.7],sun:[0xffb070,1],sky:{e:2,a:250,t:8,r:3},env:.4,g1:0x3a3434,g2:0x6a6058,R:30,wall:30,amb:{c:[1.8,.8,.3],n:30,g:1,life:3,size:.1,spd:.4}},
 async run(){const mb=mat(0xd8d0c4,{r:.45}),st=mat(0x5a5048);cyl(0,.02,0,27,.04,mb,false,64);for(let i=0;i<12;i++){const a=i/12*TAU;column(Math.cos(a)*18,Math.sin(a)*18,9,mb)}
@@ -582,7 +670,7 @@ async run(){const mb=mat(0xd8d0c4,{r:.45}),st=mat(0x5a5048);cyl(0,.02,0,27,.04,m
  tip('Side Quest: Prometheus’s Hidden Ember — light all four braziers in the south chamber. Each flame stirs its neighbours.');
  obj('Plunge your weapon into the Eternal Pyre');await inter(new V3(0,0,2.6),'Plunge into the flame');
  if(W.fs){pl.fs=true;toast('Prometheus’s ember circles you!')}let T=45;W.st=0;
- W.tick=dt=>{T-=dt;obj(`Endure the purification — ${Math.ceil(Math.max(T,0))}s`);if((W.st-=dt)<=0&&W.enemies.filter(e=>!e.dead).length<9){W.st=2.2;const a=rand(0,TAU);spawn(Math.random()<.15?'brute':'shade',Math.cos(a)*22,Math.sin(a)*22)}};
+ W.tick=dt=>{T-=dt;obj(`Endure the purification — ${Math.ceil(Math.max(T,0))}s`);if((W.st-=dt)<=0&&W.enemies.filter(e=>!e.dead).length<9){W.st=2.2;const a=rand(0,TAU);spawn(Math.random()<.15?'brute':'shade',Math.cos(a)*15,Math.sin(a)*15,undefined,0,{rise:1})}};toast('The Miasma in your blood calls to the shades — they rise from the floor!');
  await until(()=>T<=0);W.tick=null;pl.fs=false;W.enemies.forEach(e=>kill(e));flash();shake(1.5);emit(new V3(0,2,0),400,{c:[3,2.4,1.5],spd:14,life:1.5,size:.5});
  S.miasma=false;S.unified=true;document.body.classList.remove('miasma');buildPlayer();
  await say([['','The white flame roars through you. The Miasma screams — and is gone.'],['Hestia','Your Spark and your weapon are one now. Go, and end this war.']]);toast('Miasma purged · Spark unified with your weapon');obj('Enter the rift');await portal(0,0,10)}},
@@ -593,11 +681,14 @@ async run(){const ob=mat(0x18161a,{m:.4,r:.6});for(let i=0;i<22;i++){const a=i/2
  const vents=S.helios?[]:[[10,0],[-10,-6],[0,-16],[16,-24],[-16,8]];for(const[x,z]of vents)cyl(x,.1,z,1.2,.2,mat(0x3a1a10,{e:0xff3000,ei:1}),false);
  W.dt=2;W.vt=3;W.lt=4;W.tick=dt=>{if((W.dt-=dt)<=0){W.dt=2.4;hz({k:'circle',pos:new V3(pl.pos.x+rand(-5,5),0,pl.pos.z+rand(-5,5)),r:3,delay:1.3,dmg:20,rock:1})}
   if((W.vt-=dt)<=0){W.vt=3.2;for(const[x,z]of vents)hz({k:'circle',pos:new V3(x,0,z),r:2.6,delay:1,dmg:15,col:0xff8000})}
-  if((W.lt-=dt)<=0){W.lt=rand(3,7);flash();hemi.intensity=3;setTimeout(()=>hemi.intensity=.6*(S.post?1.5:1),120)}};
+  if((W.lt-=dt)<=0){W.lt=rand(3,7);flash();hemi.intensity=1.3;setTimeout(()=>hemi.intensity=.6*(S.post?1.5:1),120)}};
+ const bat=[['grunt',-6,10],['grunt',6,10],['grunt',0,6],['archer',-12,0],['archer',12,0],['grunt',0,0]].map(([t,x,z])=>spawn(t,x,z,undefined,0,{guard:16,look:[0,30]}));
  player(0,30);await say([['Zeus','This is it! Every god, every Giant, every freed mortal — CHARGE!'],['Zeus',`${S.name} — you are the tip of the spear. Break the gates of Othrys!`]]);
  toast(S.helios?'Helios kept his word — the fire traps lie dark.':'Helios’s fire vents still burn — watch the ground!');
- obj('Shatter the outer battalion');await killAll([spawn('grunt',-6,10),spawn('grunt',6,10),spawn('grunt',0,6),spawn('archer',-12,0),spawn('archer',12,0),spawn('grunt',0,0)]);
- obj('Break the Titan vanguard');await killAll([spawn('brute',-8,-10),spawn('brute',8,-10),spawn('grunt',0,-14),spawn('grunt',-4,-18),spawn('archer',10,-22),spawn('archer',-10,-22)]);
+ obj('Shatter the outer battalion');await killAll(bat);
+ shake(.8);toast('The citadel gate grinds open a crack — the Titan vanguard marches out!');const vg=[];
+ for(const[t,x,z]of[['brute',-8,-10],['brute',8,-10],['grunt',0,-14],['grunt',-4,-18],['archer',10,-22],['archer',-10,-22]]){vg.push(spawn(t,x,z,undefined,0,{from:[rand(-2,2),-36]}));await wait(.6)}
+ obj('Break the Titan vanguard');await killAll(vg);
  obj('Shatter the Citadel Gate');await killAll([gate]);shake(2);flash();await say([['','The black gates of Othrys crack — and fall.']]);obj('Storm the throne room');await portal(0,0,-40)}},
 {act:'Act V · The Fall of Othrys',name:'The Eye of Chronology',th:{bg:0x0e0a06,fog:.02,hemi:[0xc0a060,0x100804,.6],sun:[0xffd890,.6],env:.3,cave:1,g1:0x2a2014,g2:0x4a3a20,R:28,wall:40,bloom:1,amb:{c:[2,1.6,.6],n:25,g:.1,life:4,size:.1,spd:.3}},
 async run(){const gd=mat(0x8a6a2a,{m:.9,r:.35}),dk=mat(0x1a1612,{m:.3,r:.6});cyl(0,.02,0,27,.04,dk,false,64);add(mesh(new THREE.TorusGeometry(20,.08,6,96).rotateX(PI/2),glow(0xffc040,2),false),0,.06,0);
@@ -605,10 +696,10 @@ async run(){const gd=mat(0x8a6a2a,{m:.9,r:.35}),dk=mat(0x1a1612,{m:.3,r:.6});cyl
  const clk=add(mesh(new THREE.TorusGeometry(7,.25,12,96),glow(0xffc040,3),false),0,9,-27);W.spin.push(clk);for(let i=0;i<6;i++){const a=i/6*TAU;torch(Math.cos(a)*21,Math.sin(a)*21,0xffb040)}
  add(mesh(new THREE.SphereGeometry(5,32,24),glow(0x60e0ff,1,.12),false),0,1.5,15);
  [[-2.5,0xd8d0c0],[0,0x1a4a6a],[2.5,0x101018]].forEach(([x,c])=>{const H=npc(x,15,{cloth:c,armor:0xa08040,beard:1.3,hs:2,hair:0xb0a8a0});H.g.rotation.y=PI;H.aR.rotation.x=-2.6});
- player(0,22);cam.yaw=PI;
+ const b=spawn('kronos',0,-14,undefined,0,{guard:-1,look:[0,22]});player(0,22);cam.yaw=PI;
  await say([['Kronos','Children. You came all this way to die in my hour.'],['','Kronos raises his scythe. Time SHATTERS — Zeus, Poseidon and Hades freeze mid-strike inside a bubble of stopped seconds.'],
   ['Kronos','…And yet you move. Of course. Your Spark was born in the void outside of Time.'],['You','Then Time has no claim on me.']]);
- tip('Phase 1: switch to your FASTEST stance — interrupt his time-rewind with rapid hits!');const b=spawn('kronos',0,-14);obj('Defeat KRONOS, THE TITAN KING');await killAll([b]);
+ tip('Phase 1: switch to your FASTEST stance — interrupt his time-rewind with rapid hits!');wake([b]);obj('Defeat KRONOS, THE TITAN KING');await killAll([b]);
  await say([['','Your weapon’s tethers coil around the scythe. You RIP it from his grasp and shatter his temporal core.'],['Kronos','No— not the void— not TARTARUS—'],['','Time resumes. The gods stagger free. Kronos is cast into the abyss.']]);
  const c=await choose('The Final Choice',`The broken scythe lies at your feet. The gods look to you. (Xenia ${S.xen} · Hubris ${S.hub})`,[
   ['The Vanguard Protector'+(S.xen>=S.hub?' ★':''),'Decline the throne. Return to the mortal realm as its eternal guardian, so the gods never abuse humanity.'],
@@ -619,9 +710,21 @@ async run(){const gd=mat(0x8a6a2a,{m:.9,r:.35}),dk=mat(0x1a1612,{m:.3,r:.6});cyl
  await complete()}},
 {act:'Echoes of Othrys',name:'The Memory Pool',th:{bg:0x0a1420,fog:.012,hemi:[0xa0c0ff,0x102030,.8],sun:[0xffe0b0,1.6],env:.5,void:1,R:24,killY:-30,bloom:1,amb:{c:[1.5,1.6,2.5],n:25,g:.2,life:4,size:.1,spd:.4}},
 async run(){arena(0x2a3440,0x60c0ff);player(0,14);await say([['','The Memory Pool ripples. Old enemies rise from it — faster, crueler, remembered wrong.']]);
- for(const[t,n]of[['warden','IRON WARDEN · ECHO'],['kampe','KAMPE · ECHO'],['kronos','KRONOS · ECHO']]){const b=spawn(t,0,-12,undefined,true);b.T={...b.T,boss:n};if(t=='kampe')b.H.wings.visible=false;
+ for(const[t,n]of[['warden','IRON WARDEN · ECHO'],['kampe','KAMPE · ECHO'],['kronos','KRONOS · ECHO']]){rift(0,-16,0x80c0ff,3.5);const b=spawn(t,0,-12,undefined,true,{from:[0,-16]});b.T={...b.T,boss:n};if(t=='kampe')b.H.wings.visible=false;
   obj('Conquer the Echoes: '+n);await killAll([b]);pl.hp=Math.min(S.maxHp,pl.hp+S.maxHp*.5);await wait(2)}
- S.gaunt=true;await say([['','The pool stills. In its reflection: a mortal child in the iron trench, looking up at a sky they have never seen — and a single spark falling toward them.'],['','(Secret ending unlocked · Constellation weapon skin unlocked)']]);await complete()}}];
+ S.gaunt=true;await say([['','The pool stills. In its reflection: a mortal child in the iron trench, looking up at a sky they have never seen — and a single spark falling toward them.'],['','(Secret ending unlocked · Constellation weapon skin unlocked)']]);await complete()}},
+{act:'Titan Rifts',get name(){return 'Titan Rift · Tier '+riftT},th:{bg:0x12040a,fog:.016,hemi:[0xd06070,0x200508,.8],sun:[0xff7080,1.5],env:.35,void:1,R:24,killY:-30,bloom:.9,amb:{c:[2,.4,.3],n:25,g:.6,life:3,size:.1,spd:.5}},
+async run(){const T=riftT;Object.assign(W,{rift:T,hsc:1+.2*(T-1),dsc:1+.07*(T-1),gsc:1+.05*T});arena(0x2a2024,0xff5030);player(0,14);
+ const waves=Math.min(3+(T/4|0),8),pool=['grunt','archer','shade','brute','harpy'].slice(0,Math.min(2+(T/2|0),5)),ports=[0,1,2,3].map(i=>{const a=i/4*TAU+PI/4;return[Math.cos(a)*19,Math.sin(a)*19]});
+ await say([['',`TITAN RIFT · TIER ${T}. Kronos’s legions tear through the walls of the world. Hold the arena.`]]);
+ for(let w=1;w<=waves;w++){obj(`Rift tier ${T} — wave ${w}/${waves}`);const n=Math.min(3+w+(T/3|0),12),l=[];for(const p of ports)rift(p[0],p[1],0xff4020,4);await wait(.8);
+  for(let i=0;i<n;i++){const p=ports[i%4];l.push(spawn(pick(pool),p[0]*.7+rand(-2,2),p[1]*.7+rand(-2,2),undefined,0,{from:p}));if(i%4==3)await wait(.6)}
+  await killAll(l);pl.hp=Math.min(S.maxHp,pl.hp+S.maxHp*.25);if(w<waves){toast(`Wave ${w} broken — the rifts are stirring…`);await wait(2)}}
+ if(T%5==0){const k=['warden','general','kampe','kronos'][(T/5-1)%4];rift(0,-14,0xff4020,4);await wait(.8);const b=spawn(k,0,-10,undefined,true,{from:[0,-14]});b.T={...b.T,boss:b.T.boss+' · RIFT CHAMPION'};if(k=='kampe')b.H.wings.visible=false;
+  obj('Defeat the Rift Champion');await killAll([b])}
+ obj('Step into the rift to claim your reward');await portal(0,0,0)}}];
+let riftT=1,hubTab=0;
+async function riftDone(){const T=W.rift,dr=Math.round((40+15*T)*(1+.1*tr('greed')));S.dr+=dr;if(T>S.rift)S.rift=T;gainXP(100+40*T);save();banner('RIFT CLEARED',`Tier ${T} · +${dr} drachma`);await fade(1);showHub();fade(0)}
 function arena(c,rc){cyl(0,-1,0,24,2,mat(c,{r:.6,m:.3}),false,64);add(mesh(new THREE.TorusGeometry(20,.1,6,96).rotateX(PI/2),glow(rc,2.5),false),0,.05,0);
  for(let i=0;i<8;i++){const a=i/8*TAU;cyl(Math.cos(a)*29,4,Math.sin(a)*29,1.4,26,mat(c),false,12);
   const ch=mesh(new THREE.CylinderGeometry(.12,.12,1,6).rotateX(PI/2),glow(rc,1.5),false);add(ch,Math.cos(a)*15,10,Math.sin(a)*15);ch.lookAt(Math.cos(a)*29,16,Math.sin(a)*29);ch.scale.z=16}}
@@ -631,25 +734,44 @@ function loadLevel(i){RUN++;W.idx=i;Sstart=JSON.stringify(S);resetWorld();const 
  W.floor=t.floor??true;W.R=t.R;W.killY=t.killY??-20;Object.assign(pl,{hp:S.maxHp,st:100,sp:100,dead:false,atk:null,grap:null,dodge:0,barrier:0,fs:false,gcd:0,meter:0,parry:0,pcd:0,sight:0,scd:0});tether.visible=false;
  buildPlayer();document.body.classList.toggle('miasma',S.miasma);[ui.menu,ui.hub,ui.dead,ui.modal].forEach(e=>e.style.display='none');ui.hud.style.display='block';ui.toasts.innerHTML='';
  ui.card.innerHTML=`<small>${L.act.toUpperCase()}</small><h1>${L.name}</h1>`;ui.card.classList.remove('show');void ui.card.offsetWidth;ui.card.classList.add('show');
- mode='play';obj('');lock();L.run().catch(e=>console.error(e))}
-async function complete(){if(!S.post&&W.idx<9)S.lvl=W.idx+1;save();await fade(1);showHub();fade(0)}
-function die(){pl.dead=true;mode='dead';document.exitPointerLock();ui.dead.style.display='flex'}
+ W.arrive=.8;mode='play';obj('');lock();L.run().catch(e=>console.error(e))}
+async function warp(){sfx('portal');const o=pl.pos.clone(),id=RUN;W.warp=1;shake(.4);emit(o,150,{c:[.6,1.2,3],spd:5,up:4,life:1.2,size:.3});
+ await new Promise(r=>{const t0=performance.now(),f=()=>{if(id!==RUN)return r();const k=Math.min((performance.now()-t0)/1100,1);PH.g.position.set(o.x,o.y+k*k*2.5,o.z);PH.g.rotation.y+=.25*k;PH.g.scale.setScalar(Math.max(1-k*k,.01));
+  camera.fov=60+k*k*45;camera.updateProjectionMatrix();if(Math.random()<.8)emit(PH.g.position,6,{c:[.8,1.4,3],spd:3,life:.6,size:.25});k<1?setTimeout(f,16):r()};f()});
+ flash();PH.g.scale.setScalar(1);camera.fov=60;camera.updateProjectionMatrix();W.warp=0}
+async function complete(){await warp();if(W.rift)return riftDone();if(!S.post&&W.idx<9)S.lvl=W.idx+1;save();await fade(1);showHub();fade(0)}
+function die(){sfx('death');pl.dead=true;mode='dead';document.exitPointerLock();ui.dead.style.display='flex';arm(ui.dead)}
 $('retry').onclick=()=>{S=JSON.parse(Sstart);loadLevel(W.idx)};
-function showHub(){RUN++;mode='hub';document.exitPointerLock();ui.hud.style.display='none';menuScene();const cost=S.merchant?15:30,post=S.post;
- ui.hub.innerHTML=`<h1>${post?'Ascended Olympus Palace':'Olympus Bunker'}</h1>
- <div class=st>${S.name} · ${HOUSES[S.house].n} · Level ${S.plv}<br>${WEAP[S.weapon].st[0].n=='Pickaxe'?'Mining Pickaxe':{staff:'Aetheric Dodecahedron Staff',aegis:'Aegis Sektor',claws:'Stygian Claws'}[S.weapon]} · Max HP ${S.maxHp} · Attack ×${S.atk.toFixed(1)}${S.align?' · Aligned with '+S.align[0].toUpperCase()+S.align.slice(1):''}<br>
- Xenia ${S.xen} · Hubris ${S.hub} · ${S.dr} drachma · ${S.potions} potions${post?'<br>Ending: '+(S.ending?'The Overlord of Time':'The Vanguard Protector'):''}</div>
- <div><button data-a=buy>Buy Potion — ${cost} dr</button>${S.merchant?'<br><small>The Mortal Merchant you freed gives you a discount.</small>':''}</div>
+function showHub(){RUN++;mode='hub';document.exitPointerLock();ui.hud.style.display='none';menuScene();ui.menu.style.display=ui.hub.style.display='none';renderHub()}
+function renderHub(){const cost=S.merchant?15:30,post=S.post,rUn=S.lvl>=4||post,wn=WEAP[S.weapon].st[0].n=='Pickaxe'?'Mining Pickaxe':{staff:'Aetheric Dodecahedron Staff',aegis:'Aegis Sektor',claws:'Stygian Claws'}[S.weapon];
+ const ready=TRIALS.some((t,i)=>!S.claim.includes(i)&&trialV(t[0])>=t[1]);
+ const J=`<div><button data-a=buy>Buy Potion — ${cost} dr</button>${S.merchant?'<br><small>The Mortal Merchant you freed gives you a discount.</small>':''}</div>
  ${post?`<p style="margin:16px 0 6px;color:#c9a24a" class=cin>Replay with radiant skies · Chrono-Blink active</p><div class=grid>${LV.slice(0,10).map((l,i)=>`<button data-l=${i}>${i+1}. ${l.name}</button>`).join('')}</div>
  <div><button class=go data-l=10>⚔ The Memory Pool — Echoes of Othrys</button></div><div>Skin: ${['Standard','Radiant Gold','Constellation'].map((n,i)=>i<2||S.gaunt?`<button data-s=${i}>${S.skin==i?'▸ ':''}${n}</button>`:'').join('')}</div>`
- :`<div><button class=go data-l=${S.lvl}>Continue → ${LV[S.lvl].name}</button></div>`}<div><button data-a=menu>Main Menu</button></div>`;ui.hub.style.display='flex'}
-ui.hub.onclick=ev=>{const b=ev.target.closest('button');if(!b)return;const d=b.dataset;
- if(d.a=='buy'){const c=S.merchant?15:30;if(S.dr>=c){S.dr-=c;S.potions++;save()}showHub()}
+ :`<div><button class=go data-l=${S.lvl}>Continue → ${LV[S.lvl].name}</button><br><small>Recommended level ${1+S.lvl*2}${S.plv<1+S.lvl*2?' — train in the Titan Rifts first':''}</small></div><p><small>🔒 The Memory Pool opens after you defeat Kronos (level 10 of 10).</small></p>`}
+ ${rUn?`<p style="margin:16px 0 6px;color:#ff9a70" class=cin>Titan Rifts — endless trials · best tier ${S.rift}</p><div><button class=go data-r=${S.rift+1}>⚔ Rift Tier ${S.rift+1}${(S.rift+1)%5?'':' · Champion'}</button>${S.rift?`<button data-r=${S.rift}>Replay Tier ${S.rift}</button>`:''}</div>`:'<p><small>Titan Rifts open after the Obsidian Crags.</small></p>'}`;
+ const TP=`<p>Talent points: <b>${S.tp}</b> · earn one every level</p><div class=pnl>${TAL.map(([k,n,d])=>`<button data-tal=${k} class="${tr(k)>=5?'done':''}">${n} ${'◆'.repeat(tr(k))}${'◇'.repeat(5-tr(k))}<span>${d} per rank · ${tr(k)>=5?'Mastered':'costs '+(tr(k)+1)+' pt'}</span></button>`).join('')}</div>`;
+ const FG=`<p>${S.dr} drachma · the Elder Giants work the anvils</p><div class=pnl><button data-f=wpn>Temper weapon · tier ${S.wpn}<span>${wn} · +8% attack · ${forgeC(S.wpn)} dr</span></button><button data-f=arm>Reinforce armour · tier ${S.arm}<span>+12 max HP · ${forgeC(S.arm)} dr</span></button></div>`;
+ const TR=`<div class=pnl>${TRIALS.map((t,i)=>{const v=trialV(t[0]),c=S.claim.includes(i);return`<button data-c=${i} class="${c?'done':''}">${t[2]}<span>${c?'Claimed':v>=t[1]?`★ Claim ${t[3][0]} dr + ${t[3][1]} talent pt`:`${Math.min(v,t[1]).toLocaleString()} / ${t[1].toLocaleString()} · ${t[3][0]} dr + ${t[3][1]} pt`}</span></button>`}).join('')}</div>`;
+ const vis=ui.hub.style.display=='flex';
+ ui.hub.innerHTML=`<h1>${post?'Ascended Olympus Palace':'Olympus Bunker'}</h1>
+ <div class=st>${S.name} · ${HOUSES[S.house].n} · Level ${S.plv}<br>${wn} +${S.wpn} · Max HP ${S.maxHp} · Attack ×${S.atk.toFixed(1)}${S.align?' · Aligned with '+S.align[0].toUpperCase()+S.align.slice(1):''}<br>
+ Xenia ${S.xen} · Hubris ${S.hub} · ${S.dr} drachma · ${S.potions} potions${post?'<br>Ending: '+(S.ending?'The Overlord of Time':'The Vanguard Protector'):''}</div>
+ <div class=tabs>${['Journey','Talents'+(S.tp?` (${S.tp})`:''),'Forge','Trials'+(ready?' ★':'')].map((n,i)=>`<button data-t=${i} class="${hubTab==i?'on':''}">${n}</button>`).join('')}</div>
+ ${[J,TP,FG,TR][hubTab]}<div><button data-a=menu>Main Menu</button></div>`;ui.hub.style.display='flex';if(!vis)arm(ui.hub)}
+ui.hub.onclick=ev=>{const b=ev.target.closest('button');if(!b)return;sfx('click');const d=b.dataset;
+ if(d.a=='buy'){const c=S.merchant?15:30;if(S.dr>=c){S.dr-=c;S.potions++;save()}renderHub()}
  if(d.a=='menu'){ui.hub.style.display='none';ui.menu.style.display='flex';mode='menu'}
- if(d.s){S.skin=+d.s;save();showHub()}if(d.l)loadLevel(+d.l)};
+ if(d.t){hubTab=+d.t;renderHub()}
+ if(d.tal){const k=d.tal,r=tr(k);if(r<5&&S.tp>=r+1){S.tp-=r+1;S.tal[k]=r+1;if(k=='undying')S.maxHp+=15;if(k=='blood')S.atk*=1.05;save()}renderHub()}
+ if(d.f){const c=forgeC(S[d.f]);if(S.dr>=c){S.dr-=c;S[d.f]++;if(d.f=='wpn')S.atk*=1.08;else S.maxHp+=12;save()}renderHub()}
+ if(d.c){const i=+d.c,t=TRIALS[i];if(!S.claim.includes(i)&&trialV(t[0])>=t[1]){S.claim.push(i);S.dr+=t[3][0];S.tp+=t[3][1];save();banner('TRIAL COMPLETE',t[2])}renderHub()}
+ if(d.s){S.skin=+d.s;save();renderHub()}if(d.r){riftT=+d.r;loadLevel(11)}if(d.l)loadLevel(+d.l)};
 $('newg').onclick=()=>{S=structuredClone(S0);creator()};
 $('cloud').onclick=async()=>{if(!API)return alert('Cloud saves need the online server.');const c=prompt('Your cloud save code — enter it on another device to continue there.\nPaste a different code to load that save:',PID);
  if(c&&c.trim()!==PID&&/^[\w-]{8,64}$/.test(c.trim())){PID=c.trim();try{localStorage.setItem('titano_id',PID)}catch(e){}await cloudLoad(true)}};
+// overlays fade in and ignore clicks for a moment so a held attack button can't pick something
+function arm(el){el.classList.remove('in');void el.offsetWidth;el.classList.add('in','arm');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('arm'),800)}
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
 function creator(){mode='create';[ui.menu,ui.hub].forEach(e=>e.style.display='none');menuScene();buildPlayer();PH.g.position.set(9,0,6);ui.creator.style.display='flex';renderCreator()}
 function renderCreator(msg=''){const B=(k,v,lab,on,st='',cl='')=>`<button class="${cl} ${on?'on':''}" data-k=${k} data-v=${v} ${st}>${lab}</button>`;
@@ -680,21 +802,22 @@ function menuScene(){resetWorld();const t=S.post?{...LV[7].th,sky:{e:30,a:200,t:
 const K={};
 addEventListener('keydown',e=>{if(e.repeat)return;K[e.code]=1;if(e.target.tagName=='INPUT')return;if(e.code=='Space'||e.code=='Tab')e.preventDefault();
  if(mode=='dlg'){if(['Enter','Space','KeyE'].includes(e.code))nextLine();return}
- if(mode=='modal'){const b=ui.modal.querySelectorAll('button')[+e.code.slice(-1)-1];if(e.code.startsWith('Digit')&&b)b.click();return}
+ if(e.code=='KeyM')return mute();
+ if(mode=='modal'){const b=ui.modal.querySelectorAll('button')[+e.code.slice(-1)-1];if(e.code.startsWith('Digit')&&b&&!ui.modal.classList.contains('arm'))b.click();return}
  if(mode=='play')({Space:jump,KeyQ:dodge,KeyF:spark,KeyG:grapple,KeyR:stanceSw,KeyE:interact,KeyX:god,KeyH:potion,KeyC:parry,KeyT:sight})[e.code]?.()});
 addEventListener('keyup',e=>K[e.code]=0);addEventListener('blur',()=>{for(const k in K)K[k]=0});
-document.addEventListener('mousedown',e=>{if(mode=='dlg'){nextLine();return}if(mode=='play'&&document.pointerLockElement)attack(e.button==2)});
+document.addEventListener('mousedown',e=>{if(mode=='dlg'){if(performance.now()-D.at>900)nextLine();return}if(mode=='play'&&document.pointerLockElement)attack(e.button==2)});
 document.addEventListener('contextmenu',e=>e.preventDefault());
-document.addEventListener('mousemove',e=>{if(document.pointerLockElement&&(mode=='play'||mode=='dlg')){cam.yaw-=e.movementX*.0022;cam.pitch=clamp(cam.pitch+e.movementY*.0022,-.5,1.2)}});
+document.addEventListener('mousemove',e=>{if(document.pointerLockElement&&(mode=='play'||mode=='dlg')){cam.yaw-=e.movementX*.0022*(Math.cos(cam.roll||0)<0?-1:1);cam.pitch=clamp(cam.pitch+e.movementY*.0022,-.5,1.2)}});
 
 // ================= loop =================
 let last=performance.now(),hudT=0;
 function frame(now){requestAnimationFrame(frame);let dt=clamp((now-last)/1000,0,.05);last=Math.max(last,now);
  if(mode=='play'&&!document.pointerLockElement&&now-lockT>1500){mode='pause';ui.pause.style.display='flex'}
- if(mode=='play'){if(hitstop>0){hitstop-=dt;dt*=.08}W.time+=dt;updPlayer(dt);for(const e of W.enemies)updEnemy(e,dt);W.enemies=W.enemies.filter(e=>!e.gone);
+ if(mode=='play'){if(hitstop>0){hitstop-=dt;dt*=.08}if(slow>0){slow-=dt;dt*=.3}W.time+=dt;if(!W.warp)updPlayer(dt);if(W.arrive>0){if(W.arrive==.8)emit(pl.pos.clone(),120,{c:[.6,1.2,3],spd:5,up:3,life:1,size:.3});W.arrive-=dt;PH.g.scale.setScalar(clamp(1-W.arrive/.8,.01,1))}for(const e of W.enemies)updEnemy(e,dt);W.enemies=W.enemies.filter(e=>!e.gone);
   updProj(dt);updHaz(dt);W.tick?.(dt);W.waiters=W.waiters.filter(w=>{if(w.c()){w.r();return false}return true});pl.gt=S.grapple?grapTarget():null}
  else if(mode!='pause')W.time+=dt;
- for(const f of FX){f.l-=dt;f.fn?.(f.o,1-f.l/f.ml,dt);if(f.l<=0)W.grp.remove(f.o)}for(let i=FX.length;i--;)if(FX[i].l<=0)FX.splice(i,1);
+ for(const f of FX){f.l-=dt;f.o.userData.k=1-f.l/f.ml;f.fn?.(f.o,f.o.userData.k,dt);if(f.l<=0)W.grp.remove(f.o)}for(let i=FX.length;i--;)if(FX[i].l<=0)FX.splice(i,1);
  W.emitters=W.emitters.filter(em=>!(em.obj&&!em.obj.parent));for(const em of W.emitters){em.acc=(em.acc||0)+em.rate*dt;const n=em.acc|0;em.acc-=n;if(n)emit(em.p,n,em.o)}
  if(W.amb&&mode!='pause'){const a=W.amb;W.acc+=a.n*dt;const n=W.acc|0;W.acc-=n;for(let i=0;i<n;i++)emit(new V3(camera.position.x+rand(-25,25),camera.position.y+rand(-8,12),camera.position.z+rand(-25,25)),1,{c:a.c,spd:a.spd,g:a.g,life:a.life,size:a.size})}
  for(const s of W.spin){if(s.userData.face)s.lookAt(camera.position.x,s.position.y,camera.position.z);else s.rotation.y+=dt*1.5}
@@ -709,10 +832,10 @@ function frame(now){requestAnimationFrame(frame);let dt=clamp((now-last)/1000,0,
 function hud(){ui.hp.style.width=Math.max(pl.hp,0)/S.maxHp*100+'%';ui.st.style.width=pl.st+'%';ui.sp.style.width=(S.spark?pl.sp:0)+'%';ui.sp.parentNode.style.opacity=S.miasma?.3:1;
  ui.mtr.style.width=pl.meter+'%';ui.mtr.classList.toggle('full',pl.meter>=100);ui.xp.style.width=S.xp/xpNeed()*100+'%';compass();
  ui.info.textContent=`Lv ${S.plv} · HP ${Math.ceil(Math.max(pl.hp,0))}/${S.maxHp} · ${stance().n}${S.melt?' (Melting)':''} · ${S.dr} dr`;
- const b=W.boss;ui.boss.style.display=b?'block':'none';if(b){ui.bossN.textContent=b.T.boss;ui.bossHp.style.width=Math.max(b.hp,0)/b.mhp*100+'%'}
+ const b=W.boss?.state=='guard'||W.boss?.state=='march'?null:W.boss;ui.boss.style.display=b?'block':'none';if(b){ui.bossN.textContent=b.T.boss;ui.bossHp.style.width=Math.max(b.hp,0)/b.mhp*100+'%'}
  let near=null;for(const i of W.inter)if(Math.hypot(i.p.x-pl.pos.x,i.p.z-pl.pos.z)<2.8&&Math.abs(i.p.y-pl.pos.y)<3)near=i;ui.prompt.innerHTML=near?'<span class=kb>E</span>'+near.label:'';
  if(pl.gt&&!pl.grap){const p=pl.gt.p.clone().project(camera);ui.gm.style.display='block';ui.gm.style.left=(p.x+1)/2*innerWidth+'px';ui.gm.style.top=(1-p.y)/2*innerHeight+'px'}else ui.gm.style.display='none';
  const k=(key,n,on=true)=>`<div class=${on?'':'off'}>${n}<kbd>${key}</kbd></div>`;
  ui.keys.innerHTML=k('LMB','Light')+k('RMB','Heavy')+k('Q',S.dash?'Aquatic Dash':'Dodge')+(S.spark?k('F',S.miasma?'Spark (sealed)':'Spark Blast',!S.miasma&&pl.sp>=25):'')+
   (S.grapple?k('G','Grapple',!!pl.gt):'')+(WEAP[S.weapon].st.length>1?k('R','Stance'):'')+k('C','Parry',pl.pcd<=0)+k('T','Spark Sight',pl.scd<=0)+k('X',(S.align=='athena'?'Aegis Barrier':S.align=='ares'?'Plasma Eruption':'Primordial Surge')+(pl.meter<100?` ${pl.meter|0}%`:' READY'),pl.meter>=100)+k('H',`Potion ×${S.potions}`,S.potions>0)}
-menuScene();$('cont').style.display=S.lvl>0||S.post?'':'none';cloudLoad();requestAnimationFrame(frame);window.dbg={get W(){return W},pl,get S(){return S},loadLevel,LV,kill,get mode(){return mode},nolock(){lockT=1e15},frame};
+menuScene();$('cont').style.display=S.lvl>0||S.post?'':'none';cloudLoad();requestAnimationFrame(frame);window.dbg={get W(){return W},pl,get S(){return S},loadLevel,LV,kill,get mode(){return mode},nolock(){lockT=1e15},frame,next:()=>nextLine(1),rift(t){riftT=t},get PH(){return PH},cam};

@@ -61,6 +61,13 @@ button:hover{border-color:#ffd77a;box-shadow:0 0 18px #ffb43a55;transform:transl
 #modal .opts button{width:290px;text-align:left;padding:16px 18px;white-space:normal}
 #modal .opts button b{display:block;font-size:16px;color:#ffd890;margin-bottom:6px}
 #modal .opts button span{font-weight:400;font-size:13px;color:#cfc3aa;line-height:1.45}
+#ban{position:fixed;top:24%;width:100%;text-align:center;opacity:0;z-index:16;pointer-events:none}
+#ban h1{font-size:64px;color:#ffe2a6;text-shadow:0 0 40px #f90,0 3px 8px #000}#ban small{display:block;font:600 14px Cinzel;letter-spacing:.35em;color:#e8d6b0;margin-top:6px;text-shadow:0 2px 6px #000}
+#ban:before,#ban:after{content:'';display:block;height:1px;margin:10px auto;width:min(520px,80vw);background:linear-gradient(90deg,#0000,#ffd77a,#0000)}
+#ban.show{animation:ban 3.2s}@keyframes ban{0%{opacity:0;transform:scale(1.25)}12%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+.ov.arm{pointer-events:none}.ov.arm button{opacity:.55}.ov.in{animation:ovin .7s ease-out}@keyframes ovin{0%{opacity:0;transform:scale(1.04)}100%{opacity:1}}
+.pnl{display:flex;flex-wrap:wrap;justify-content:center;max-width:960px;margin:6px 0}.pnl button{width:220px;white-space:normal;text-align:left}.pnl button span{display:block;font-weight:400;font-size:12px;color:#cfc3aa;margin-top:4px}
+.pnl button.done{border-color:#7ad77a}.tabs button.on{border-color:#ffd77a;box-shadow:0 0 14px #ffb43a55}
 #card{position:fixed;top:30%;width:100%;text-align:center;opacity:0;z-index:15;pointer-events:none}
 #card small{font:600 13px Cinzel;letter-spacing:.4em;color:#c9a24a}#card h1{font-size:52px;color:#fff3d6;text-shadow:0 0 30px #f80a}
 #card.show{animation:card 4.5s}
@@ -91,11 +98,11 @@ body.miasma #vig{box-shadow:inset 0 0 200px #2a6a10cc}
 </div>
 <div id="dlg"><b id="dlgS"></b><p id="dlgT"></p><small><span class="kb">Enter</span> Continue</small></div>
 <div id="modal" class="ov"></div>
-<div id="card"></div><div id="pop"></div><div id="creator" class="ov"></div><div id="fade"></div><div id="flash"></div>
+<div id="card"></div><div id="ban"></div><div id="pop"></div><div id="creator" class="ov"></div><div id="fade"></div><div id="flash"></div>
 <div id="menu" class="ov">
  <h1>TITANOMACHY</h1><h3>THE FIRST SPARK</h3>
  <div><button id="newg">New Game</button><button id="cont">Continue</button><button id="cloud">Cloud Save</button></div>
- <div class="ctl">WASD move · Mouse look · LMB light / RMB heavy attack · SHIFT sprint · SPACE jump · Q dodge / dash<br>C parry (on <span style="color:#ffd060">yellow</span> warnings) · F Spark Blast · G Grapple · T Spark Sight · R stance · E interact · X Primordial power (meter) · H potion · ESC pause</div>
+ <div class="ctl">WASD move · Mouse look · LMB light / RMB heavy attack · SHIFT sprint · SPACE jump · Q dodge / dash<br>C parry (on <span style="color:#ffd060">yellow</span> warnings) · F Spark Blast · G Grapple · T Spark Sight · R stance · E interact · X Primordial power (meter) · H potion · M sound · ESC pause</div>
 </div>
 <div id="hub" class="ov"></div>
 <div id="pause" class="ov"><h1>Paused</h1><p style="margin-top:12px">Click to resume</p></div>
