@@ -7,7 +7,7 @@ A 3D action-adventure built with Three.js. Node server and Neon Postgres cloud s
 
 ## Progression
 
-- Story: 10 levels across 5 acts. The Memory Pool unlocks after Kronos falls.
+- Story: 20 chapters across 5 acts, getting harder chapter by chapter. The Memory Pool unlocks after Kronos falls.
 - Titan Rifts: endless wave arenas that unlock after the Obsidian Crags. Every 5th tier ends with a Rift Champion.
 - Hub tabs: Talents (one point per level), Forge (drachma upgrades), and Trials (long-term milestones).
 - Audio is synthesised in the browser with Web Audio. Press M to mute.

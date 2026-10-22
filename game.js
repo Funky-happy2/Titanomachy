@@ -3,6 +3,7 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
 import {Sky} from 'three/addons/objects/Sky.js';
 
 // ================= core =================
@@ -20,13 +21,17 @@ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(60,1,.1,3000);
 const composer=new EffectComposer(renderer,new THREE.WebGLRenderTarget(1,1,{samples:4,type:THREE.HalfFloatType}));
 composer.addPass(new RenderPass(scene,camera));
 const bloom=new UnrealBloomPass(new THREE.Vector2(256,256),.45,.4,1.05);composer.addPass(bloom);composer.addPass(new OutputPass());
+// final grade: richer colour, warm highlights / cool shadows, gentle S-curve and vignette
+const grade=new ShaderPass({uniforms:{tDiffuse:{value:null},sat:{value:1.14},vig:{value:.42}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'uniform sampler2D tDiffuse;uniform float sat,vig;varying vec2 vUv;void main(){vec4 c=texture2D(tDiffuse,vUv);float l=dot(c.rgb,vec3(.299,.587,.114));c.rgb=mix(vec3(l),c.rgb,sat);'+
+  'c.rgb*=mix(vec3(.93,.98,1.07),vec3(1.05,1.,.93),smoothstep(.1,.75,l));c.rgb=mix(c.rgb,c.rgb*c.rgb*(3.-2.*c.rgb),.22);vec2 d=vUv-.5;c.rgb*=1.-vig*dot(d,d)*2.;gl_FragColor=c;}'});composer.addPass(grade);
 function resize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)}
 addEventListener('resize',resize);resize();
 
 const hemi=new THREE.HemisphereLight(),sun=new THREE.DirectionalLight();scene.add(hemi,sun,sun.target);
 sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:220});
 sun.shadow.camera.updateProjectionMatrix();sun.shadow.bias=-.0004;sun.shadow.normalBias=.04;
-const fill=new THREE.PointLight(0xfff0dc,16,18,1.5);scene.add(fill);const sky=new Sky();sky.scale.setScalar(2500);const skyScene=new THREE.Scene(),pmrem=new THREE.PMREMGenerator(renderer);let envRT;
+const fill=new THREE.PointLight(0xfff0dc,16,18,1.5),rim=new THREE.DirectionalLight(0xa8c4ff,1.4);scene.add(fill,rim,rim.target);const sky=new Sky();sky.scale.setScalar(2500);const skyScene=new THREE.Scene(),pmrem=new THREE.PMREMGenerator(renderer);let envRT;
 
 // ================= procedural textures / materials =================
 const hash=(x,y)=>{const s=Math.sin(x*127.1+y*311.7)*43758.5453;return s-Math.floor(s)};
@@ -72,7 +77,7 @@ function updParticles(dt){for(let i=0;i<PN;i++){if(pL[i]>0){pL[i]-=dt;const k=Ma
 
 // ================= state =================
 const S0={lvl:0,xen:0,hub:0,weapon:'pick',stance:0,align:null,dr:0,potions:2,maxHp:100,atk:1,merchant:false,spark:false,dash:false,grapple:false,
- melt:false,miasma:false,unified:false,nymphs:false,helios:false,post:false,ending:null,skin:0,gaunt:false,sh:[],name:'Spark-bearer',sex:'m',skinT:2,hairS:6,hairC:0,house:0,xp:0,plv:1,tp:0,tal:{},wpn:0,arm:0,rift:0,stat:{k:0,p:0,b:0},claim:[]};
+ melt:false,miasma:false,unified:false,nymphs:false,helios:false,post:false,ending:null,skin:0,gaunt:false,sh:[],name:'Spark-bearer',sex:'m',skinT:2,hairS:6,hairC:0,house:0,xp:0,plv:1,tp:0,tal:{},wpn:0,arm:0,rift:0,stat:{k:0,p:0,b:0},claim:[],v:2};
 // long-term progression: talents (points from levels), forge tiers (drachma), trials (milestones)
 const TAL=[['undying','Undying','+15 max HP'],['blood','Titan Blood','+5% attack'],['wind','Swift Wind','+4% move speed'],['focus','Divine Focus','+15% gold meter gain'],['hide','Ironhide','−4% damage taken'],['greed','Hermes’ Favour','+10% drachma']];
 const tr=k=>S.tal[k]|0,forgeC=t=>Math.round(60*(t+1)**1.6);
@@ -87,12 +92,15 @@ const HOUSES=[{n:'House of the Flame',p:'Prometheus',c:0xb3261a,d:0x4a1a14,t:'+1
  {n:'House of the Hunt',p:'Artemis',c:0x2a8a46,d:0x1a3a22,t:'+10% speed, faster stamina recovery',q:'You run where others stumble.'},
  {n:'House of the Anvil',p:'Hephaestus',c:0xc08020,d:0x4a3418,t:'+15% melee damage',q:'You were forged, not born.'}];
 const SKINS=[0xf1c7a5,0xd9a57e,0xb67a52,0x8d5a3b,0x5e3b26,0x3b2418],HAIRC=[0x1a120c,0x4a2a14,0x8a5a2a,0xd8b060,0xa8a8a8,0x8a1a10],HAIRS=['Shaved','Short','Long','Ponytail','Curls','Topknot','Tousled'];
-const load=()=>{try{return JSON.parse(localStorage.getItem('titano'))}catch(e){return null}};
+// story order (LV indices): each original chapter is followed by a new one; S.lvl is a position in this list
+const ORD=[0,12,1,13,2,14,3,15,4,16,5,17,6,18,7,19,8,20,21,9];
+const mig=s=>{if(s&&!s.v){if(s.lvl>0)s.lvl=Math.max(0,ORD.indexOf(s.lvl)-1);s.v=2}return s};
+const load=()=>{try{return mig(JSON.parse(localStorage.getItem('titano')))}catch(e){return null}};
 let S=Object.assign(structuredClone(S0),load()||{}),Sstart='{}';
 let PID=(()=>{try{let i=localStorage.getItem('titano_id');if(!i){i=crypto.randomUUID();localStorage.setItem('titano_id',i)}return i}catch(e){return null}})();
 const API=/^https?:/.test(location.protocol);
 const save=()=>{S.t=Date.now();try{localStorage.setItem('titano',JSON.stringify(S))}catch(e){}if(API&&PID)fetch('/api/save/'+PID,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(S)}).catch(()=>{})};
-async function cloudLoad(force){if(API&&PID)try{const r=await fetch('/api/save/'+PID);if(r.ok){const d=await r.json();if(d&&(force||(d.t||0)>(S.t||0))){S=Object.assign(structuredClone(S0),d);try{localStorage.setItem('titano',JSON.stringify(S))}catch(e){}}}}catch(e){}
+async function cloudLoad(force){if(API&&PID)try{const r=await fetch('/api/save/'+PID);if(r.ok){const d=await r.json();if(d&&(force||(d.t||0)>(S.t||0))){S=Object.assign(structuredClone(S0),mig(d));try{localStorage.setItem('titano',JSON.stringify(S))}catch(e){}}}}catch(e){}
  $('cont').style.display=S.lvl>0||S.post?'':'none'}
 const xpNeed=()=>80+S.plv*40;function gainXP(n){S.xp+=n;while(S.xp>=xpNeed()){S.xp-=xpNeed();S.plv++;S.tp++;S.maxHp+=8;S.atk*=1.04;pl.hp=S.maxHp;banner('LEVEL '+S.plv,'+1 Talent Point — spend it at the hub');emit(new V3(pl.pos.x,pl.pos.y+1,pl.pos.z),120,{c:[3,2.4,.8],spd:5,up:3,life:1})}}
 const WEAP={pick:{col:0xc0c8d0,st:[{n:'Pickaxe',dmg:11,rng:2.4,arc:2,spd:.45,heavy:2.2}]},
@@ -106,7 +114,7 @@ const wcol=()=>[WEAP[S.weapon].col,0xffc860,0x9a80ff][S.skin]||WEAP[S.weapon].co
 const W={},FX=[];
 function resetWorld(){if(W.grp){scene.remove(W.grp);W.grp.traverse(o=>{o.geometry?.dispose();[].concat(o.material||[]).forEach(m=>m.dispose())})}
  scene.remove(sky);Object.assign(W,{grp:new THREE.Group(),cols:[],enemies:[],proj:[],haz:[],anchors:[],inter:[],emitters:[],lights:[],spin:[],waiters:[],
-  tick:null,time:0,grav:1,ceil:0,warp:0,rift:0,hsc:1,dsc:1,gsc:1,arrive:0,boss:null,floor:true,R:40,floorY:0,killY:-20,water:null,lava:null,amb:null,acc:0});FX.length=0;scene.add(W.grp)}
+  tick:null,time:0,grav:1,ceil:0,warp:0,rift:0,hsc:1,dsc:1,gsc:1,cdk:1,arrive:0,boss:null,floor:true,R:40,floorY:0,killY:-20,water:null,lava:null,amb:null,acc:0});FX.length=0;scene.add(W.grp)}
 const add=(o,x=0,y=0,z=0)=>{o.position.set(x,y,z);W.grp.add(o);return o};
 function block(x,y,z,w,h,d,m,solid=true){const o=add(mesh(boxGeo(w,h,d),m),x,y,z);if(solid)W.cols.push({x0:x-w/2,x1:x+w/2,z0:z-d/2,z1:z+d/2,bot:y-h/2,top:y+h/2});return o}
 function cyl(x,y,z,r,h,m,solid=true,seg=20,rb=r){const o=add(mesh(uvS(new THREE.CylinderGeometry(r,rb,h,seg),r*1.5,Math.max(h/4,r/2)),m),x,y,z);if(solid)W.cols.push({cyl:1,x,z,r,bot:y-h/2,top:y+h/2});return o}
@@ -121,8 +129,13 @@ function terrain(t){const N=150,SZ=420,g=new THREE.PlaneGeometry(SZ,SZ,N,N);g.ro
  for(let i=0;i<p.count;i++){const x=p.getX(i),z=p.getZ(i),d=Math.hypot(x,z),n=fbm(x*.04,z*.04),m=smoothstep(d,t.R,t.R+35);
   p.setY(i,(n-.5)*.35*(1-m)+m*(t.wall??30)*(.35+fbm(x*.015+5,z*.015))+(t.fy??0));c.copy(a).lerp(b,clamp(n*1.3-.2+m*.4,0,1));col.push(c.r,c.g,c.b)}
  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.computeVertexNormals();uvS(g,SZ/5,SZ/5);add(mesh(g,mat(0xffffff,{vc:1}),false))}
+// painted nebula backdrop for the void levels, tinted by the level's light
+const NEB={};function nebula(t){const A=new THREE.Color(t.bg).convertLinearToSRGB(),B=new THREE.Color(t.hemi[0]).convertLinearToSRGB(),C=new THREE.Color(t.sun[0]).convertLinearToSRGB(),o=new THREE.Color();
+ return canvasTex((u,v)=>{const n=fbm(u*6,v*5,6),m=fbm(u*12+4,v*9+2,12),band=Math.exp(-(((v-.5-.08*Math.sin(u*TAU*2))/.16)**2)),k=clamp(band*(n*1.6-.35),0,1),h=Math.pow(m,3)*band;
+  o.copy(A).multiplyScalar(.6).lerp(B,k*.55).lerp(C,h*.5);const st=hash(u*997,v*991)>.997?.9:0;return[(o.r+st)*255,(o.g+st)*255,(o.b+st*1.1)*255].map(x=>Math.min(255,x))},512,1)}
 function base(t){if(t.cave){const m=mat(0x1a1612,{ds:1});add(mesh(new THREE.SphereGeometry(85,32,16),m,false));
   for(let i=0;i<40;i++){const a=rand(0,TAU),r=rand(15,60),s=add(mesh(new THREE.ConeGeometry(rand(.4,1.4),rand(3,9),7),mat(0x2a2420)),Math.cos(a)*r,rand(16,24),Math.sin(a)*r);s.rotation.x=PI}}
+ if(t.void){const k=t.bg+'_'+t.hemi[0];NEB[k]??=nebula(t);const sp=new THREE.Mesh(new THREE.SphereGeometry(1400,48,24),new THREE.MeshBasicMaterial({map:NEB[k],side:1,fog:false,depthWrite:false}));sp.renderOrder=-1;W.grp.add(sp)}
  if(t.void){const g=new THREE.BufferGeometry(),v=[];for(let i=0;i<2500;i++){const d=new V3().randomDirection().multiplyScalar(rand(300,900));v.push(d.x,d.y,d.z)}
   g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));W.grp.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xc8b8ff,size:1.6,sizeAttenuation:false})))}
  else terrain(t);
@@ -134,32 +147,51 @@ function applyTheme(t){const post=S.post&&!t.cave&&!t.void,s=post?{e:38,a:(t.sky
  W.sunDir=new V3().setFromSphericalCoords(1,(90-s.e)*PI/180,s.a*PI/180);const u=sky.material.uniforms;
  u.turbidity.value=s.t;u.rayleigh.value=s.r;u.mieCoefficient.value=.005;u.mieDirectionalG.value=.8;u.sunPosition.value.copy(W.sunDir);
  skyScene.add(sky);envRT?.dispose();envRT=pmrem.fromScene(skyScene,0,.1,10000);scene.environment=envRT.texture;scene.environmentIntensity=Math.max(t.env??.5,.45);
- if(t.sky||post)scene.add(sky);renderer.toneMappingExposure=(t.exp??1)*1.1*(S.post?1.05:1);bloom.strength=(t.bloom??.7)*.6;W.amb=t.amb}
+ if(t.sky||post)scene.add(sky);renderer.toneMappingExposure=(t.exp??1)*1.1*(S.post?1.05:1);bloom.strength=(t.bloom??.7)*.6;rim.color.set(t.rim??t.hemi[0]).lerp(new THREE.Color(0xffffff),.35);rim.intensity=t.cave?.45:.7;W.amb=t.amb}
 
 // ================= characters =================
+// sculpted parts: the face is one displaced sphere, limbs are pills whose round ends overlap at the joints
+const sst=(x,a,b)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)},gs=(x,y,z,cx,cy,cz,s)=>Math.exp(-((x-cx)**2+(y-cy)**2+(z-cz)**2)/(s*s));
+function skull(d,face,f){const ax=Math.abs(d.x);let r=1+.06*sst(d.z,0,-1)*sst(d.y,-.3,.4);
+ if(face)r+=-.05*gs(ax,d.y,d.z,.34,.14,.92,.2)+.045*gs(ax,d.y,d.z,0,.3,.95,.3)*sst(ax,.62,.2)+.2*gs(d.x,d.y,d.z,0,-.12,1,.1)+.07*gs(d.x,d.y,d.z,0,.06,1,.11)
+  +.035*gs(ax,d.y,d.z,.55,-.08,.8,.22)+.03*gs(d.x,d.y,d.z,0,-.43,.95,.13)-.018*gs(d.x,d.y,d.z,0,-.5,.95,.06)+.025*gs(d.x,d.y,d.z,0,-.86,.55,.25)+.09*gs(ax,d.y,d.z,1,.02,-.1,.18)+.04*gs(ax,d.y,d.z,.62,-.5,.55,.25);
+ const j=sst(d.y,-.1,-1);return new V3(d.x*r*(.86-(f?.13:.08)*j),d.y*r*1.06,d.z*r*(.98-.05*j)+(d.z>0?.03*j:0))}
+function headG(sk,hc){const g=new THREE.SphereGeometry(1,80,64),p=g.attributes.position,d=new V3(),c=new THREE.Color(),Sk=new THREE.Color(sk),L=new THREE.Color(0x9a4a44),Hc=new THREE.Color(hc),Mo=new THREE.Color(0x3a1814),col=[];
+ for(let i=0;i<p.count;i++){d.fromBufferAttribute(p,i);const q=skull(d,1).multiplyScalar(.115),ax=Math.abs(d.x),fr=sst(d.z,.55,.8);p.setXYZ(i,q.x,q.y,q.z);
+  const lip=Math.exp(-((d.x/.2)**2)-((d.y+.45)/.055)**2)*fr,brow=Math.exp(-(((ax-.33)/.17)**2)-((d.y-.31+.25*(ax-.3)**2)/.05)**2)*fr,mo=Math.exp(-((d.x/.16)**2)-((d.y+.475)/.03)**2)*fr;
+  c.copy(Sk).lerp(L,lip*.7).lerp(Mo,mo*.6).lerp(Hc,Math.min(1,brow*1.3));col.push(c.r,c.g,c.b)}
+ g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));g.computeVertexNormals();return g}
+function hairG(k,amt,fr,fq){const g=new THREE.SphereGeometry(1,64,40),p=g.attributes.position,d=new V3();
+ for(let i=0;i<p.count;i++){d.fromBufferAttribute(p,i);const a=Math.atan2(d.x,d.z),
+  line=(d.z>0?lerp(.14,.42,d.z**1.5):lerp(.14,-.6,-d.z))-fr*Math.max(0,Math.sin(a*9+.7))**2*sst(d.z,.55,.95),cv=sst(d.y-line,-.05,.05),
+  n=.5+.5*Math.sin(a*fq+Math.sin(d.y*6)*2),cl=Math.max(0,Math.sin(a*5+d.y*7))**4*sst(d.y,.1,.8),r=lerp(.9,k*(1+amt*(n*.4+cl*1.6)+.04*Math.max(0,d.y)),cv);
+  p.setXYZ(i,...skull(d,0).multiplyScalar(r*.115).toArray())}g.computeVertexNormals();return g}
+function pill(r1,r2,l,bu=0,pk=.5,s=16){const v=[],q=Math.log(.5)/Math.log(pk);
+ for(let i=0;i<=5;i++){const a=-PI/2+i/5*PI/2;v.push(new THREE.Vector2(Math.cos(a)*r2,-l+Math.sin(a)*r2))}
+ for(let i=1;i<10;i++){const t=i/10;v.push(new THREE.Vector2(lerp(r2,r1,t)+bu*r1*Math.sin(PI*t**q),-l+t*l))}
+ for(let i=0;i<=5;i++){const a=i/5*PI/2;v.push(new THREE.Vector2(Math.cos(a)*r1,Math.sin(a)*r1))}return new THREE.LatheGeometry(v,s)}
 function humanoid(o){const M=[],mk=(c,x={})=>{const m=mat(c,o.ghost?{...x,e:o.ghost,ei:.6,op:.82}:x);M.push(m);return m};
  const f=o.sex=='f',b=o.bulk??1,ab=b*(f?.85:1),P=(geo,m,x,y,z,p,sc)=>{const q=mesh(geo,m);q.position.set(x,y,z);if(sc)q.scale.set(...sc);p.add(q);return q},
   Sp=(r,m,x,y,z,p,sc)=>P(new THREE.SphereGeometry(r,18,14),m,x,y,z,p,sc),
   La=(pts,m,p,k)=>{const q=P(new THREE.LatheGeometry(pts.map(([r,h])=>new THREE.Vector2(r*k*b,h)),28),m,0,0,0,p);q.scale.z=.74;return q};
- const skin=mk(o.skin??0xc08a68,{r:.55,b:.2}),cloth=mk(o.cloth??0x553322,{ds:1,r:.95}),arm=mk(o.armor??0x8a7a5a,o.leather?{m:.15,r:.6,ds:1}:{m:.85,r:.35,ds:1}),hm=mk(o.hair??0x1a120c,{r:.75,b:2}),boot=mk(o.boot??0x3a2618,{r:.7});
+ const skin=mk(o.skin??0xc08a68,{r:.5,f:1}),cloth=mk(o.cloth??0x553322,{ds:1,r:.95}),arm=mk(o.armor??0x8a7a5a,o.leather?{m:.15,r:.6,ds:1}:{m:.85,r:.35,ds:1}),hm=mk(o.hair??0x1a120c,{r:.6,f:1}),boot=mk(o.boot??0x3a2618,{r:.7});
  const g=new THREE.Group(),hips=new THREE.Group();hips.position.y=1;g.add(hips);
- const prof=f?[[0,-.08],[.18,-.06],[.215,.04],[.18,.16],[.145,.27],[.17,.37],[.185,.45],[.165,.51],[.09,.56],[.05,.6]]:[[0,-.08],[.165,-.06],[.19,.05],[.18,.18],[.17,.27],[.21,.38],[.235,.46],[.215,.52],[.11,.57],[.055,.6]];
+ const prof=f?[[0,-.08],[.18,-.06],[.215,.04],[.18,.16],[.145,.27],[.17,.37],[.185,.45],[.17,.51],[.12,.565],[.068,.61]]:[[0,-.08],[.165,-.06],[.19,.05],[.18,.18],[.17,.27],[.21,.38],[.235,.46],[.225,.52],[.15,.575],[.075,.62]];
  La(prof,cloth,hips,1);if(f)for(const x of[-.075,.075])Sp(.068,cloth,x,.41,.1,hips,[1,1,.85]);
  if(o.armor!=null&&!o.robe)La(prof.slice(3,9),arm,hips,1.08);
  P(new THREE.TorusGeometry(.185*b,.022,8,28),mk(o.belt??0x3a2414,{r:.6}),0,.07,0,hips,[1,.74,1]).rotation.x=PI/2;
  P(new THREE.CylinderGeometry(.19*b,(o.robe?.4:.26)*b,o.robe?1.02:.38,24,1,true),cloth,0,o.robe?-.43:-.1,0,hips,[1,1,.8]);
  if(o.armor!=null&&!o.robe)for(let i=0;i<14;i++){const a=i/14*TAU,q=P(boxGeo(.075*b,.2,.018),arm,Math.sin(a)*.205*b,-.06,Math.cos(a)*.155*b,hips);q.rotation.y=a;q.rotation.x=.12}
- P(new THREE.CylinderGeometry(.05*ab,.058*ab,.14,12),skin,0,.6,0,hips);
- const head=new THREE.Group();head.position.y=.78;hips.add(head);
- head.scale.setScalar(.93);Sp(.115,skin,0,0,0,head,[.9,1.08,1]);Sp(f?.074:.086,skin,0,-.06,.03,head,[1,.8,1]);
- P(new THREE.ConeGeometry(.019,.055,6),skin,0,-.008,.115,head).rotation.x=PI/2;for(const x of[-.104,.104])Sp(.024,skin,x,0,0,head,[.5,1,.8]);
+ P(pill(.058*ab,.066*ab,.14),skin,0,.7,0,hips);
+ const head=new THREE.Group();head.position.y=.765;hips.add(head);
+ head.scale.setScalar(.98);const hcol=o.hair??0x1a120c;P(headG(o.skin??0xc08a68,hcol),mk(0xffffff,{vc:1,f:1,r:.5}),0,0,0,head);
  const eyeM=o.eye?glow(o.eye,5):mk(0x15100c,{r:.2,f:1});
  if(o.cyclops){Sp(.042,eyeM,0,.02,.098,head);P(boxGeo(.11,.016,.02),hm,0,.06,.1,head)}
- else for(const x of[-.04,.04]){if(!o.eye)Sp(.02,mk(0xf2ece4,{r:.3}),x,.02,.09,head,[1.2,.8,.6]);Sp(o.eye?.015:.011,eyeM,x,.02,o.eye?.098:.101,head);P(boxGeo(.045,.012,.015),hm,x,.048,.103,head)}
- const hs=o.hs??(o.helm||o.hood?-1:1),cap=k=>{const c=P(new THREE.SphereGeometry(.125*k,18,10,0,TAU,0,PI*.55),hm,0,.016,-.012,head);c.rotation.x=-.22;return c};
- if(hs>=1&&hs<=3||hs==5||hs==6)cap(hs==6?1.07:1);
- if(hs==6)for(let i=0;i<16;i++){const a=i/16*TAU+Math.sin(i*3.7)*.15,fr=Math.cos(a)>.55,d=fr?new V3(Math.sin(a)*.6,-.25,1).normalize():new V3(Math.sin(a)*.75,.95+Math.sin(i*5.3)*.25,Math.cos(a)*.75).normalize(),
-  l=P(new THREE.SphereGeometry(fr?.032:.04,10,8),hm,0,0,0,head,[.8,fr?1.7:1.9,.55]);l.quaternion.setFromUnitVectors(new V3(0,1,0),d);l.position.set(Math.sin(a)*.085,fr?.075:.085,Math.cos(a)*.07).addScaledVector(d,.02)}if(hs==4)cap(1.2).scale.y=1.08;
+ else for(const s of[-1,1]){const q=skull(new V3(s*.34,.14,.92).normalize(),1).multiplyScalar(.115*.955);
+  if(!o.eye)Sp(.017,mk(0xe4ddd2,{r:.25,f:1}),q.x,q.y,q.z-.004,head,[1.4,.7,.55]);Sp(o.eye?.015:.0088,o.eye?eyeM:mk(0x2a1a10,{r:.15,f:1}),q.x,q.y,q.z+.0055,head,[1,1,.5])}
+ const hs=o.hs??(o.helm||o.hood?-1:1),cap=(k,a=.02,fr=0,fq=22)=>P(hairG(k,a,fr,fq),hm,0,0,0,head);
+ if(hs>=1&&hs<=3||hs==5)cap(1.05);if(hs==6)cap(1.08,.09,.32,14);
+ if(hs==4)cap(1.16,.12,0,30);
  if(hs==2)P(new THREE.CylinderGeometry(.118,.14,.34,18,1,true,PI/2,PI),hm,0,-.15,-.012,head);
  if(hs==3){Sp(.055,hm,0,.02,-.13,head);P(new THREE.ConeGeometry(.045,.32,8),hm,0,-.15,-.15,head).rotation.x=PI-.25}
  if(hs==5)Sp(.065,hm,0,.13,-.05,head);
@@ -170,19 +202,19 @@ function humanoid(o){const M=[],mk=(c,x={})=>{const m=mat(c,o.ghost?{...x,e:o.gh
  if(o.hood){P(new THREE.SphereGeometry(.15,18,10,0,TAU,0,PI*.62),cloth,0,.012,-.015,head);P(new THREE.ConeGeometry(.12,.26,14,1,true),cloth,0,-.03,-.14,head).rotation.x=-PI/2-.4}
  if(o.crown)for(let i=0;i<7;i++){const a=i/7*TAU;P(new THREE.ConeGeometry(.03,.2,5),glow(0xffc040,3),Math.cos(a)*.12,.17,Math.sin(a)*.12,head)}
  if(o.halo)P(new THREE.TorusGeometry(.32,.02,8,48),glow(0xffd060,4),0,.06,-.2,head);
- const limb=(x,y,l1,l2,r1,r2,m1,m2)=>{const p=new THREE.Group();p.position.set(x,y,0);hips.add(p);P(new THREE.CylinderGeometry(r1,r1*.82,l1,14),m1,0,-l1/2,0,p);
-  const j=new THREE.Group();j.position.y=-l1;p.add(j);Sp(r1*.82,m1,0,0,0,j);P(new THREE.CylinderGeometry(r2,r2*.75,l2,14),m2,0,-l2/2,0,j);const e=new THREE.Group();e.position.y=-l2;j.add(e);return[p,j,e]};
+ const limb=(x,y,l1,l2,r1,r2,m1,m2,b1=.1,b2=.12,k2=.35)=>{const p=new THREE.Group();p.position.set(x,y,0);hips.add(p);P(pill(r1,r1*.8,l1,b1,.6),m1,0,0,0,p);
+  const j=new THREE.Group();j.position.y=-l1;p.add(j);P(pill(r2,r2*.72,l2,b2,1-k2),m2,0,0,0,j);const e=new THREE.Group();e.position.y=-l2;j.add(e);return[p,j,e]};
  const sw=(f?.18:.205)*b,[aL,eL,handL]=limb(-sw,.49,.29,.26,.056*ab,.044*ab,skin,skin),[aR,eR,hand]=limb(sw,.49,.29,.26,.056*ab,.044*ab,skin,skin),brc=mk(o.bracer??0x2a1c12,{r:.7});
  for(const[a,h,sx]of[[aL,handL,-1],[aR,hand,1]]){Sp(.066*ab,o.armor!=null||o.pants?cloth:skin,0,0,0,a,[1.15,1,1.1]);
-  if(!o.robe&&(o.armor!=null||o.pants))P(new THREE.CylinderGeometry(.068*ab,.064*ab,.13,14),cloth,0,-.06,0,a);
+  if(!o.robe&&(o.armor!=null||o.pants))P(pill(.068*ab,.066*ab,.1),cloth,0,-.01,0,a);
   if(o.armor!=null)for(const[y,k]of[[.03,1],[-.035,.86]]){const q=P(new THREE.SphereGeometry(.1*ab*k,16,8,0,TAU,0,PI*.5),arm,sx*.01,y,0,a,[1.05,.7,1.1]);q.rotation.z=-sx*.35}
   P(new THREE.CylinderGeometry(.051*ab,.046*ab,.15,14),o.armor!=null?arm:brc,0,-.12,0,a.children[1]);
-  Sp(.042*ab,skin,0,-.04,0,h,[.75,1.15,.5]);P(new THREE.CylinderGeometry(.012,.012,.05,6),skin,sx*-.03,-.02,.02,h).rotation.z=sx*.6}
+  P(pill(.033*ab,.03*ab,.055,.05),skin,0,.005,0,h,[.95,1,.62]);P(pill(.013,.011,.04),skin,sx*-.026,-.005,.014,h).rotation.z=sx*.7}
  let lL,lR,kL,kR,tail=null;
  if(o.tail){lL=new THREE.Group();lR=new THREE.Group();kL=new THREE.Group();kR=new THREE.Group();tail=new THREE.Group();hips.add(tail);const tm=mk(o.skin,{r:.5,m:.2});
   for(let i=0;i<16;i++){const t=i/15,sg=Sp(.21*(1-t*.8)*b,tm,0,lerp(-.1,-.88,Math.min(1,t*2.2)),-Math.max(0,t*2.2-1)*1.9,tail);sg.scale.set(1,.85,1.2)}}
- else{[lL,kL]=limb(-.1*b,-.02,.46,.44,.088*b,.062*b,o.pants?cloth:skin,o.armor!=null?arm:skin);[lR,kR]=limb(.1*b,-.02,.46,.44,.088*b,.062*b,o.pants?cloth:skin,o.armor!=null?arm:skin);
-  for(const k of[kL,kR]){P(new THREE.CylinderGeometry(.062*b,.058*b,.2,14),boot,0,-.34,0,k);P(boxGeo(.085*b,.06,.22*b),boot,0,-.47,.045,k)}}
+ else{[lL,kL]=limb(-.1*b,-.02,.46,.44,.088*b,.062*b,o.pants?cloth:skin,o.armor!=null?arm:skin,.08,.16,.25);[lR,kR]=limb(.1*b,-.02,.46,.44,.088*b,.062*b,o.pants?cloth:skin,o.armor!=null?arm:skin,.08,.16,.25);
+  for(const k of[kL,kR]){P(pill(.066*b,.054*b,.2,.02),boot,0,-.22,0,k);const ft=P(pill(.046*b,.042*b,.17*b,.05),boot,0,-.46,-.04,k,[1,1,.62]);ft.rotation.x=-PI/2}}
  let wings=null;if(o.wings){wings=new THREE.Group();hips.add(wings);const wm=mk(o.wings,{ds:1});
   for(const s of[-1,1]){const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(.6,.35);sh.lineTo(1.7,.75);sh.lineTo(1.55,.1);sh.lineTo(1.3,-.35);sh.lineTo(.9,-.2);sh.lineTo(.7,-.6);sh.lineTo(.4,-.35);sh.lineTo(.15,-.45);
    const w=mesh(new THREE.ShapeGeometry(sh),wm);w.scale.x=s;w.position.set(s*.1,.46,-.15);wings.add(w)}}
@@ -235,7 +267,7 @@ const BBG=new THREE.SpriteMaterial({color:0,transparent:true,opacity:.6,depthTes
 function spawn(t,x,z,y,hard,o){const T=ET[t],H=T.build?null:humanoid(T.h);if(H&&(T.w||T.sh))eWeap(H,T.w,T.sh);const s=T.h?.s||1;
  const e={t,T,H,root:H?H.g:T.build(),pos:new V3(x,y??Math.max(groundAt(x,z,60),0),z),vel:new V3(),hp:T.hp*(hard?1.6:1),state:'chase',tt:rand(.5,1.5),py:0,
   face:Math.atan2(pl.pos.x-x,pl.pos.z-z),flash:0,r:T.r||.45*s,h:1.9*s,stun:0,ph:0,spd:hard?1.35:1,mt:1.5,fly:T.fly,hc:0,ca:0,as:0,grounded:0,M:[]};
- e.hp*=W.hsc||1;e.mhp=e.hp;e.cy=T.cy??e.h*.55;e.root.traverse(o=>{if(o.material?.emissive){o.material.userData.e=o.material.emissive.clone();e.M.push(o.material)}});
+ e.hp*=T.boss?1+(W.hsc-1)*.7:W.hsc;e.mhp=e.hp;e.cy=T.cy??e.h*.55;e.root.traverse(o=>{if(o.material?.emissive){o.material.userData.e=o.material.emissive.clone();e.M.push(o.material)}});
  if(o?.from){e.go=new V3(x,0,z);e.pos.set(o.from[0],Math.max(groundAt(o.from[0],o.from[1],60),0),o.from[1]);e.state='march';e.face=Math.atan2(x-o.from[0],z-o.from[1])}
  if(o?.rise){e.state='rise';e.tt=1.3;e.gy=e.pos.y;e.pos.y-=e.h*1.1}
  if(o?.guard){e.state='guard';e.ag=o.guard;if(o.look)e.face=Math.atan2(o.look[0]-x,o.look[1]-z)}
@@ -275,7 +307,7 @@ function updEnemy(e,dt){const T=e.T;
    if(T.ranged){e.mv=d>T.rng*.8?1:d<T.rng*.4?-1:0;if(d<T.rng&&(e.tt-=dt)<=0){e.state='wind';e.tt=T.wind}}
    else{e.mv=d>T.rng*.8?1:0;if(d<T.rng+.3&&Math.abs(pl.pos.y-e.pos.y)<2.5){e.state='wind';e.tt=T.wind}}}
   else if(e.state=='wind'){e.face=turn(e.face,ty,dt*4);arm=-2.5;e.tt-=dt;if(Math.random()<.4)emit(e.H.hand.getWorldPosition(_v),1,{c:[3,.4,.1],spd:.5,g:0,life:.3,size:.25});
-   if(e.tt<=0){e.state='rec';e.tt=T.cd*rand(.8,1.2);e.as=.25;
+   if(e.tt<=0){e.state='rec';e.tt=T.cd*rand(.8,1.2)*W.cdk;e.as=.25;
     if(T.ranged){const o=new V3(e.pos.x,e.pos.y+1.5,e.pos.z),tg=new V3(pl.pos.x,pl.pos.y+1,pl.pos.z);shoot(o,tg.sub(o).normalize(),{spd:20,col:0xff8030,pc:[2,.8,.2],dmg:T.dmg})}
     else meleeHit(e,T.rng,2,T.dmg)}}
   else{e.tt-=dt;e.mv=d>5?.5:0;e.face=turn(e.face,ty,dt*3);if(e.tt<=0){e.state='chase';e.tt=rand(.3,1)}}}
@@ -317,7 +349,7 @@ function bossAI(e,dt,d,ty){const T=e.T;
   if(e.t=='kampe'){e.H.wings.visible=true;e.fly=1;toast('Kampe takes wing! Grapple [G] onto her to drag her down!')}
   else if(e.t=='kronos')toast('Kronos warps time — slow zones bend your swings. Jump the shockwaves, grapple out!');else toast(T.boss+' is enraged!')}
  if(e.stun>0){e.arm=.3;return}
- if(e.move){const m=e.move;m.pt=m.t;m.t+=dt*e.spd;if(MOVES[m.n](e,m,dt,d,ty)){e.move=null;e.arm=null;e.mt=T.cd*rand(.7,1.2)/e.spd}return}
+ if(e.move){const m=e.move;m.pt=m.t;m.t+=dt*e.spd;if(MOVES[m.n](e,m,dt,d,ty)){e.move=null;e.arm=null;e.mt=T.cd*rand(.7,1.2)*W.cdk/e.spd}return}
  e.face=turn(e.face,ty,dt*5);e.mv=d>3.4?1:0;
  if((e.mt-=dt)<=0){const l=(e.phase2&&T.m2||T.m1).filter(n=>n!='rewind'||e.hp<e.mhp*.85);e.move={n:pick(l),t:0,pt:0}}}
 
@@ -364,13 +396,13 @@ function collide(o,r,h){const inv=o===pl&&W.grav<0,y=o.pos.y,lo=inv?y-h:y,hi=inv
   if(dist>=r)continue;
   if(!inv&&(lo>=c.top-.5||plo>=c.top-.05)){if(c.top>sup)sup=c.top;continue}
   if(inv&&(hi<=c.bot+.5||phi<=c.bot+.05)){if(c.bot<sup)sup=c.bot;continue}
-  if(hi<=c.bot||lo>=c.top)continue;
+  if(hi<=c.bot||lo>=c.top||(inv?o.py>=c.top-.05:o===pl&&W.ceil&&o.py<=c.bot+.05))continue; // just flipped: falling away from the surface we stood on
   if(!inv&&o.vel.y>0&&phi<=c.bot+.05){o.pos.y=c.bot-h;o.vel.y=0;continue}
   o.pos.x+=nx*(r-dist);o.pos.z+=nz*(r-dist)}
  if(!inv){if(o.pos.y<=sup+.05&&o.vel.y<=0){o.pos.y=sup;o.vel.y=0;o.onGround=true}}
  else if(o.pos.y>=sup-.05&&o.vel.y>=0){o.pos.y=sup;o.vel.y=0;o.onGround=true}}
 function groundAt(x,z,y){let s=-Infinity;if(W.floor&&Math.hypot(x,z)<W.R+1)s=W.floorY;
- for(const c of W.cols){const inn=c.cyl?Math.hypot(x-c.x,z-c.z)<c.r:x>=c.x0&&x<=c.x1&&z>=c.z0&&z<=c.z1;if(inn&&c.top<=y+.5&&c.top>s)s=c.top}return s}
+ for(const c of W.cols){const inn=c.cyl?Math.hypot(x-c.x,z-c.z)<c.r:x>=c.x0&&x<=c.x1&&z>=c.z0&&z<=c.z1;if(inn&&c.top<=y+.5&&c.top>s&&!(W.ceil&&c.bot>=W.ceil))s=c.top}return s}
 
 // ================= player =================
 const pl={pos:new V3(),vel:new V3(),py:0,face:PI,hp:100,st:100,sp:100,inv:0,dodge:0,dd:new V3(),atk:null,combo:0,ct:0,buf:0,grap:null,air:1,gcd:0,barrier:0,fs:false,onGround:false,ph:0,safe:new V3(),safeT:0,wg:[]};
@@ -381,7 +413,7 @@ function buildPlayer(){if(PH)scene.remove(PH.g);PH=humanoid({sex:S.sex,skin:SKIN
  // the cape hangs from a mantle across the shoulders, pinned with two clasps
  const mn=mesh(new THREE.TorusGeometry(.2,.03,8,24,PI*.9).rotateX(PI/2).rotateY(PI*.05).scale(1.05,1,.78),PH.cape.material);mn.position.set(0,.53,0);mn.rotation.y=PI;PH.hips.add(mn);
  for(const x of[-.19,.19]){const c=mesh(new THREE.SphereGeometry(.03,10,8),mat(0xd0a040,{m:1,r:.25}));c.position.set(x,.52,-.04);PH.hips.add(c)}
- if(S.spark){const c=mesh(new THREE.SphereGeometry(.045,10,8),glow(S.miasma?0x60ff30:0x80d8ff,2.2),false);c.position.set(0,.43,.17);PH.hips.add(c)}buildWeapon()}
+ if(S.spark){const c=mesh(new THREE.SphereGeometry(.026,12,8),glow(S.miasma?0x60ff30:0x80d8ff,1.5),false);c.position.set(0,.43,.17);PH.hips.add(c);const r=mesh(new THREE.TorusGeometry(.036,.009,8,20),mat(0xb08a40,{m:.9,r:.3,f:1}),false);r.position.set(0,.43,.165);PH.hips.add(r)}buildWeapon()}
 function buildWeapon(){for(const g of pl.wg)g.parent?.remove(g);pl.wg=[];const w=S.weapon,st=S.stance,c=wcol(),k=S.unified?5:3,G=glow(c,k),GT=glow(c,k*.6,.4),iron=mat(0x24262c,{m:.9,r:.3}),brz=mat(0xb07a3a,{m:.95,r:.25});
  const grp=h=>{const g=new THREE.Group();h.add(g);pl.wg.push(g);return g},A=(g,geo,m,x,y,z,rx=PI/2)=>{const q=mesh(geo,m);q.position.set(x,y,z);q.rotation.x=rx;g.add(q);return q};
  const g=grp(PH.hand);pl.tip=new THREE.Object3D();g.add(pl.tip);pl.dode=null;
@@ -503,7 +535,7 @@ const SFX={swing:t=>nz(t,.16,{v:.22,f:700,f2:2600,q:2}),heavy:t=>nz(t,.3,{v:.32,
  rift:t=>{tone(60,t,1.5,{type:'sawtooth',v:.12,f2:110});nz(t,1.2,{v:.15,f:200,f2:900})},power:t=>{tone(110,t,1,{type:'sawtooth',v:.2,f2:440});nz(t,.8,{v:.3,f:300,f2:5000})}};
 function sfx(n){if(!AC||!AU.on)return;const t=AC.currentTime;if(t-(AU.last[n]||0)<.04)return;AU.last[n]=t;SFX[n](t)}
 // adaptive score: a lyre walks the level's mode over a drone; drums join when a fight is on
-const MODES={dor:[0,2,3,5,7,9,10],phr:[0,1,3,5,7,8,10],lyd:[0,2,4,6,7,9,11],aeo:[0,2,3,5,7,8,10]},MOOD=[['phr',130.8],['dor',146.8],['lyd',164.8],['phr',138.6],['aeo',123.5],['phr',116.5],['dor',155.6],['lyd',146.8],['phr',130.8],['phr',110],['lyd',174.6],['aeo',110]];
+const MODES={dor:[0,2,3,5,7,9,10],phr:[0,1,3,5,7,8,10],lyd:[0,2,4,6,7,9,11],aeo:[0,2,3,5,7,8,10]},MOOD=[['phr',130.8],['dor',146.8],['lyd',164.8],['phr',138.6],['aeo',123.5],['phr',116.5],['dor',155.6],['lyd',146.8],['phr',130.8],['phr',110],['lyd',174.6],['aeo',110],['phr',123.5],['dor',138.6],['lyd',155.6],['phr',146.8],['aeo',116.5],['aeo',130.8],['phr',103.8],['dor',146.8],['phr',123.5],['lyd',138.6]];
 const mus={next:0,st:0,deg:7,mood:['dor',146.8]};
 function music(){if(!AC||AC.state!='running')return;const t0=AC.currentTime;if(mus.next<t0)mus.next=t0+.05;
  while(mus.next<t0+.35){const t=mus.next,st=mus.st++,[md,root]=mode=='play'||mode=='dlg'?MOOD[W.idx]||mus.mood:['dor',146.8],sc=MODES[md],
@@ -631,7 +663,8 @@ async run(){const bas=mat(0x24201e,{r:.9}),plat=(x,z,w,top)=>block(x,top-1.5,z,w
 {act:'Act III · The Tartarus Jailbreak',name:'The Inverted Vaults',th:{bg:0x06040e,fog:.012,hemi:[0x8060d0,0x100820,.8],sun:[0xb0a0ff,1.3],env:.3,void:1,floor:0,killY:-30,bloom:.9,amb:{c:[.8,.5,2],n:30,g:0,life:3,size:.1,spd:.6}},
 async run(){const vs=mat(0x2a2638,{r:.8,m:.2}),rune=glow(0x9060ff,2.5);
  for(const[x,t,z,w,d]of[[0,0,0,12,12],[0,2,-16,8,8],[12,4,-27,6,6],[-12,5,-28,6,6],[0,7,-40,10,10],[16,9,-46,6,6],[26,11,-36,8,8],[-14,9,-46,6,6]]){block(x,t-1,z,w,2,d,vs);add(mesh(boxGeo(w*1.02,.08,d*1.02),rune,false),x,t-2,z)}
- block(0,23,-28,56,2,56,vs);W.ceil=22;for(let i=0;i<30;i++){let x,z;do{x=rand(-27,27);z=rand(-55,-1)}while(Math.abs(x)<20&&z>-50&&z<-6);const h=rand(1,2.2),s=add(mesh(new THREE.ConeGeometry(rand(.3,.6),h,6),glow(0x7040ff,1.5)),x,22-h/2,z);s.rotation.x=PI}
+ block(6,23,-22,84,2,80,vs);W.ceil=22;const gl=glow(0x6a48c0,.9);for(let x=-30;x<=42;x+=12)add(mesh(boxGeo(.08,.04,76),gl,false),x,21.98,-22);for(let z=-58;z<=14;z+=12)add(mesh(boxGeo(80,.04,.08),gl,false),6,21.98,z);
+ for(let i=0;i<34;i++){let x,z;do{x=rand(-35,47);z=rand(-61,17)}while(x>-30&&x<42&&z>-56&&z<12);const h=rand(1,2.2),s=add(mesh(new THREE.ConeGeometry(rand(.3,.6),h,6),glow(0x7040ff,1.5)),x,22-h/2,z);s.rotation.x=PI}
  for(const p of[[6,7,-22],[-6,9,-36],[20,15,-42],[0,16,-28],[-14,15,-46]])anchor(...p);
  const py=[spawn('pylon',0,-42),spawn('pylon',26,-36),spawn('pylon',-10,-20,22)];py[2].root.rotation.z=PI;py[2].cy=-2.5;ichor(16,9,-46);player(0,4);
  W.gt=12;W.ht=3;W.tick=dt=>{W.gt-=dt;if(W.grav>0&&W.gt<2&&!W.warn){W.warn=1;toast('⚠ Gravity inverting!')}
@@ -724,13 +757,119 @@ async run(){const T=riftT;Object.assign(W,{rift:T,hsc:1+.2*(T-1),dsc:1+.07*(T-1)
   obj('Defeat the Rift Champion');await killAll([b])}
  obj('Step into the rift to claim your reward');await portal(0,0,0)}}];
 let riftT=1,hubTab=0;
+// ---- the second half of the saga: one new chapter follows each original one (story order lives in ORD)
+const named=(e,n)=>{e.T={...e.T,boss:n,m1:e.T.m1||['swipe','slam','charge'],m2:e.T.m2||['swipe','slam','charge','wave']};W.boss=e;return e},alive=()=>W.enemies.filter(e=>!e.dead&&!e.T.st),
+ drop=(r,n,dmg,iv)=>{W.dt=1;W.tick=dt=>{if((W.dt-=dt)<=0){W.dt=rand(iv*.7,iv*1.3);for(let i=0;i<n;i++)hz({k:'circle',pos:new V3(pl.pos.x+rand(-r,r),pl.pos.y,pl.pos.z+rand(-r,r)),r:2.6,delay:1.4,dmg,rock:1})}}};
+LV.push(
+{act:'Act I · The Sparks of Rebellion',name:'The Collapsing Galleries',th:{...LV[0].th,R:34},
+async run(){const iron=mat(0x3a3a40,{m:.8,r:.4}),wood=mat(0x4a3220);for(let i=0;i<8;i++){const a=i/8*TAU;torch(Math.cos(a)*24,Math.sin(a)*24)}
+ for(let i=0;i<10;i++){const a=i/10*TAU+.2;cyl(Math.cos(a)*16,3,Math.sin(a)*16,.35,6,wood,true,8)}for(let i=0;i<16;i++)rock(rand(-26,26),0,rand(-26,26),rand(.5,1.3),mat(0x2a2420));
+ const ds=[[-26,0],[26,0],[0,-26]];ds.forEach(([x,z])=>door(x,z,iron));player(0,20);
+ await say([['','The trench groans. Zeus’s lightning has split the galleries open, and the whole mine is coming down.'],['Miner','(from the dark) They chained the night shift to the rock! The overseers left us to be buried!']]);
+ drop(6,1,16,2.2);tip('Falling rock — step out of the red ring before it lands');
+ let n=0;const foes=[];
+ for(const[x,z]of[[-14,-8],[14,-10],[-6,-20],[8,6]]){const H=npc(x,z,{s:.9,cloth:0x4a3a2a,skin:0xb08060,hs:pick([1,4,6])});H.aL.rotation.z=-2.2;H.aR.rotation.z=2.2;
+  inter(new V3(x,0,z),'Break the shackles').then(()=>{n++;H.aL.rotation.z=-.1;H.aR.rotation.z=.1;fx(H.g,2.5,o=>{o.position.z+=.08});const d=ds[n%3];
+   toast('The overseers heard the chains break!');for(let i=0;i<1+n;i++)foes.push(spawn(pick(['grunt','grunt','archer']),d[0]*.6+rand(-3,3),d[1]*.6+rand(-3,3),undefined,0,{from:d}))})}
+ await until(()=>{obj(`Free the chained miners — ${n}/4`);return n==4});obj('Drive off the overseers');await killAll(foes);
+ const b=named(spawn('brute',0,-14,undefined,1,{from:[0,-26]}),'THE OVERSEER');await say([['Overseer','WHO broke my chains?! Back to the rock, all of you!']]);
+ obj('Defeat THE OVERSEER');await killAll([b]);W.tick=null;await say([['Miner','Go! The vault below — we felt something wake down there.']]);obj('Drop into the rift');await portal(0,0,-4)}},
+{act:'Act I · The Sparks of Rebellion',name:'The Cyclopes’ Forge',th:{...LV[1].th,hemi:[0xc08050,0x100804,.55],sun:[0xff9050,.4],amb:{c:[2,.8,.3],n:30,g:.8,life:3,size:.1,spd:.5}},
+async run(){const st=mat(0x3a3430,{r:.8}),mt=mat(0x202024,{m:.9,r:.3});for(let i=0;i<8;i++){const a=i/8*TAU;torch(Math.cos(a)*22,Math.sin(a)*22,0xff7030)}
+ const cy=[[-14,-10],[14,-10],[0,-22]],G=[];
+ cy.forEach(([x,z],i)=>{block(x,.6,z+2.5,3,1.2,1.6,mt);W.emitters.push({p:new V3(x,1.4,z+2.5),rate:20,o:{c:[3,1.2,.3],spd:1,up:2,g:1,life:.5,size:.3,r:.4}});
+  const H=npc(x,z,{s:1.7,bulk:1.4,cloth:0x3a2a1a,skin:0x9a8a78,cyclops:1,hs:0,beard:1.1});H.aL.rotation.z=-2.2;H.aR.rotation.z=2.2;H.head.rotation.x=.4;
+  const g={guard:8,look:[x,z]},l=[spawn('grunt',x-3,z+5,undefined,0,g),spawn('grunt',x+3,z+5,undefined,0,g),spawn(i==2?'brute':'archer',x,z+7,undefined,0,g)];G.push(l);
+  inter(new V3(x,0,z+4),'Unchain the Cyclops').then(()=>{H.aL.rotation.z=-.1;H.aR.rotation.z=.1;H.head.rotation.x=0;H.free=1;emit(new V3(x,3,z),80,{c:[3,1.4,.4],spd:5});wake(l)})});
+ player(0,18);await say([['Hades','The Cyclopes — Brontes, Steropes, Arges. My father chained the finest smiths alive to his forges.'],['Hades','Free them and they will owe the rebellion every thunderbolt they ever make.']]);
+ tip('Each Cyclops is watched by a squad — strike first, or slip in and break the chain');
+ await until(()=>{const n=G.filter(l=>l.every(e=>e.dead)).length;obj(`Free the Cyclopes and rout their keepers — ${n}/3`);return n==3});
+ rift(0,-6,0xff5020,4);await wait(.7);const b=named(spawn('warden',0,-2,undefined,1,{from:[0,-6]}),'THE FORGE JAILER');
+ await say([['Brontes','The Jailer! He holds the key to our eye-chains — break him, little spark!']]);obj('Defeat THE FORGE JAILER');await killAll([b]);
+ S.atk*=1.05;await say([['Arges','For you, a thunder-edge, folded in the heart of the forge. (+5% attack)'],['Hades','Good. Now — to the sea. Oceanus will not wait.']]);obj('Enter the rift');await portal(0,0,8)}},
+{act:'Act II · The Elemental Forges',name:'The Drowned Causeway',th:{...LV[2].th,sky:{e:6,a:230,t:14,r:3},fog:.014},
+async run(){const wd=mat(0x5a4030);isle(0,0,10);isle(0,-30,9);isle(22,-52,8);isle(0,-76,10);
+ block(0,-.5,-14.5,3,1,13,wd);block(4,-.5,-42,3,1,6,wd);block(12,-.5,-45,14,1,3,wd);block(22,-.5,-62,3,1,6,wd);block(12,-.5,-66,22,1,3,wd);anchor(10,6,-40);anchor(12,6,-64);
+ const isl=[[0,-30],[22,-52],[0,-76]],SQ=[[['grunt','archer','grunt'],['archer','archer','grunt','grunt'],['general','grunt','archer','archer']]][0],lit=[];
+ const sq=isl.map(([x,z],i)=>SQ[i].map((t,k)=>{const a=k/SQ[i].length*TAU;return spawn(t,x+Math.cos(a)*4,z+Math.sin(a)*4,undefined,0,{guard:10,look:[0,0]})}));named(sq[2][0],'THE CAUSEWAY ADMIRAL');
+ isl.forEach(([x,z],i)=>{cyl(x,1.5,z,.4,3,mat(0x4a4038),true,10);inter(new V3(x,0,z+1.2),'Light the beacon').then(()=>{lit.push(i);W.emitters.push({p:new V3(x,3.3,z),rate:40,o:{c:[3,1.6,.5],spd:1,up:3,g:1,life:.8,size:.5,r:.3}});wake(sq[i])})});
+ W.ht=8;W.tick=dt=>{if((W.ht-=dt)<=0&&W.enemies.filter(e=>!e.dead&&e.t=='harpy').length<3){W.ht=9;const a=rand(0,TAU);spawn('harpy',pl.pos.x+Math.cos(a)*28,pl.pos.z+Math.sin(a)*28,pl.pos.y+5)}};
+ player(0,5);await say([['Poseidon','The fleet is free, but the causeway is Oceanus’s still. Light the three war-beacons so my ships can find the strait.'],['Poseidon','His admiral holds the last isle. Watch the skies — harpies nest on the rocks.']]);
+ await until(()=>{obj(`Light the beacons and clear each isle — ${lit.length}/3`);return lit.length==3&&sq.every(l=>l.every(e=>e.dead))});W.tick=null;
+ await say([['Poseidon','The beacons burn! Every trident in the sea is yours.']]);obj('Enter the rift');await portal(0,0,-80)}},
+{act:'Act II · The Elemental Forges',name:'The Caldera Foundry',th:{...LV[3].th,sky:{e:3,a:80,t:20,r:3}},
+async run(){const bas=mat(0x24201e,{r:.9}),plat=(x,z,w,top=0)=>block(x,top-1.5,z,w,3,w,bas);plat(0,0,26);
+ const C=[[0,-22],[22,0],[0,22],[-22,0]],cores=[],tw=[];
+ C.forEach(([x,z],i)=>{plat(x,z,10);block(x/2,-1.5,z/2,x?20:4,3,z?20:4,bas);cores.push(spawn('ore',x,z),spawn('ore',x+2,z+2));
+  spawn(i%2?'archer':'grunt',x-2,z-2,undefined,0,{guard:9,look:[0,0]});spawn('grunt',x+2,z-2,undefined,0,{guard:9,look:[0,0]})});
+ tw.push(spawn('tower',9,-9),spawn('tower',-9,9));player(0,6);
+ await say([['Hephaestus','Hyperion feeds his solar towers from magma cores beneath the caldera. Smash the cores and his fire goes dark.'],['Hephaestus','Mind the towers — they will burn you from across the lava.']]);
+ await until(()=>{const n=cores.filter(e=>e.dead).length;obj(`Smash the magma cores — ${n}/8`);return n==8});tw.forEach(t=>!t.dead&&kill(t));shake(1);flash();
+ rift(0,-8,0xff6020,4);await wait(.7);const b=named(spawn('general',0,-4,undefined,1,{from:[0,-8]}),'THE FORGEMASTER OF HYPERION');b.H.M.forEach(m=>m.color?.multiplyScalar(1.4));
+ await say([['Forgemaster','You have cooled my furnaces. I will reheat them in your blood!']]);obj('Defeat THE FORGEMASTER');await killAll([b,...alive().filter(e=>e!==b)]);
+ obj('Enter the rift');await portal(0,0,0)}},
+{act:'Act III · The Tartarus Jailbreak',name:'The Chained Deep',th:{...LV[5].th,hemi:[0x9060c0,0x100820,.75],sun:[0xc080ff,1.4]},
+async run(){arena(0x241e2c,0xa040ff);for(let i=0;i<4;i++){const a=i/4*TAU+PI/4,H=humanoid({s:5,bulk:1.5,cloth:0x2a2a2a,skin:0x5a4a40,eye:0xff4020,beard:1.3,hs:4});add(H.g,Math.cos(a)*42,-6,Math.sin(a)*42);H.g.rotation.y=Math.atan2(-Math.cos(a),-Math.sin(a));H.aL.rotation.z=-2.4;H.aR.rotation.z=2.4}
+ const py=[0,1,2,3].map(i=>{const a=i/4*TAU+PI/4;return spawn('pylon',Math.cos(a)*16,Math.sin(a)*16)});player(0,0);
+ await say([['Hades','The Elder Giants hang in the deep, bound by four soul-anchors. Every anchor you break, the dead below will notice.'],['Hades','They rise from the floor here. Keep moving.']]);
+ W.st=2;W.tick=dt=>{const up=py.filter(e=>!e.dead).length;if(up&&(W.st-=dt)<=0&&alive().length<4+(4-up)*2){W.st=3.4-(4-up)*.5;const a=rand(0,TAU),r=rand(6,14);spawn(Math.random()<.2?'brute':'shade',pl.pos.x+Math.cos(a)*r*.6,pl.pos.z+Math.sin(a)*r*.6,undefined,0,{rise:1})}};
+ await until(()=>{const n=py.filter(e=>e.dead).length;obj(`Break the soul-anchors — ${n}/4`);return n==4});W.tick=null;obj('Destroy the risen dead');await until(()=>!alive().length);
+ await say([['Giants','(a sound like mountains breathing) …the chains… loosen…'],['Hades','One cage left. Kampe’s.']]);obj('Enter the rift');await portal(0,0,0)}},
+{act:'Act IV · The Shadow of Miasma',name:'The Poisoned Road',th:{bg:0x4a4644,fog:.022,hemi:[0x9090a0,0x302820,.8],sun:[0xd0c8c0,1.1],sky:{e:12,a:150,t:20,r:4},env:.45,g1:0x3a3632,g2:0x56504a,R:60,wall:40,amb:{c:[.7,.7,.7],n:60,g:-.6,life:5,size:.12,spd:.6}},
+async run(){const dw=mat(0x2a2420),st=mat(0x6a6460);for(let z=40;z>-50;z-=6)for(const s of[-1,1]){const x=s*rand(6,9);cyl(x,2,z+rand(-2,2),.25,4,dw,true,6);if(Math.random()<.5)rock(s*rand(10,16),0,z,rand(.6,1.5),st)}
+ const SH=[[0,18],[0,-8],[0,-34]];let n=0;
+ player(0,44);await say([['Athena','Kampe’s poison runs deep. Spark Blast is sealed — only your steel, dash and hook remain.'],['Athena','Walk the old road to Parnassus. Pray at each wayside shrine; the shades will try to stop you.']]);
+ for(const[x,z]of SH){cyl(x+3,.6,z,.8,1.2,st,true,10);W.emitters.push({p:new V3(x+3,1.4,z),rate:10,o:{c:[1.2,1.2,2],spd:.4,up:1,g:.4,life:1,size:.2,r:.3}})}
+ for(const[x,z]of SH){obj(`Pray at the wayside shrines — ${n}/3`);await inter(new V3(x+3,0,z+1.3),'Pray at the shrine');n++;pl.hp=Math.min(S.maxHp,pl.hp+S.maxHp*.3);
+  toast('The ground splits — shades crawl out of the ash!');const l=[];for(let i=0;i<3+n*2;i++){const a=rand(0,TAU);l.push(spawn(i==2+n*2&&n>1?'brute':'shade',x+Math.cos(a)*7,z+Math.sin(a)*7,undefined,0,{rise:1}))}
+  obj('Survive the ambush');await killAll(l)}
+ obj('Follow the road to the mountain');await portal(0,0,-46)}},
+{act:'Act IV · The Shadow of Miasma',name:'Hall of the Hollow Kings',th:{bg:0x0c0a12,fog:.025,hemi:[0x6050a0,0x080610,.6],sun:[0x8070c0,.4],env:.2,cave:1,g1:0x1a1820,g2:0x2a2632,R:28,wall:40,bloom:.9,amb:{c:[.8,.5,1.6],n:20,g:.1,life:4,size:.1,spd:.3}},
+async run(){const st=mat(0x3a3644,{r:.7});for(let i=0;i<10;i++){const a=i/10*TAU;column(Math.cos(a)*22,Math.sin(a)*22,10,st)}for(let i=0;i<6;i++){const a=i/6*TAU;torch(Math.cos(a)*18,Math.sin(a)*18,0x9060ff)}
+ const sar=[],K=[];for(let i=0;i<6;i++){const a=i/6*TAU+PI/6,x=Math.cos(a)*12,z=Math.sin(a)*12;block(x,.5,z,2,1,3.4,st);sar.push([x,z]);K.push(spawn('shade',x,z+2.5,undefined,0,{guard:7,look:[0,0]}))}
+ player(0,20);await say([['','The tombs of kings who served the Titans, and refused to stay dead.'],['Athena','Hestia’s temple lies past their hall. Their lord will not let you pass quietly.']]);
+ obj('Silence the hollow guard');await killAll(K);toast('The sarcophagi grind open…');
+ const l=sar.map(([x,z])=>spawn(pick(['shade','shade','brute']),x,z+2.5,undefined,0,{rise:1}));await killAll(l);
+ const b=named(spawn('general',0,-6,undefined,1,{rise:1}),'THE HOLLOW POLEMARCH');b.H.M.forEach(m=>{m.emissive?.set(0x301050)});
+ await say([['Polemarch','I held this hall for Kronos for a thousand years. I will hold it a thousand more.']]);obj('Defeat THE HOLLOW POLEMARCH');await killAll([b]);
+ obj('Enter the rift');await portal(0,0,-14)}},
+{act:'Act V · The Fall of Othrys',name:'The Siege Lines',th:{...LV[8].th,R:50},
+async run(){const ob=mat(0x18161a,{m:.4,r:.6}),wd=mat(0x3a2a18);for(let i=0;i<12;i++)rock(rand(-34,34),0,rand(-30,30),rand(.6,1.6),ob);
+ for(let x=-30;x<=30;x+=4)block(x,1,-38,3.6,2,1,wd);door(0,-40,ob);door(-24,-36,ob);door(24,-36,ob);
+ const T=[[-18,-18],[18,-18],[0,-28]],tw=T.map(([x,z])=>spawn('tower',x,z));T.forEach(([x,z])=>['grunt','grunt','archer'].forEach((t,k)=>spawn(t,x+(k-1)*3,z+5,undefined,0,{guard:12,look:[0,30]})));
+ player(0,30);await say([['Zeus','Kronos’s siege towers rake our lines from the ridge. Burn them, and the army can march on the citadel.'],['Zeus','Every tower that falls, he will throw more of his legions at you. Be ready.']]);
+ let n=0;for(const t of tw)until(()=>t.dead).then(()=>{n++;toast('The gates open — Titan reinforcements!');for(let i=0;i<2+n;i++){const d=pick([[0,-40],[-24,-36],[24,-36]]);spawn(pick(['grunt','archer','brute']),d[0]*.6+rand(-3,3),-20+rand(-3,3),undefined,0,{from:d})}});
+ await until(()=>{obj(`Topple the siege towers — ${n}/3`);return n==3});obj('Break the last of the legion');await until(()=>!alive().length);
+ await say([['Zeus','The ridge is ours! Now — the citadel itself.']]);obj('Enter the rift');await portal(0,0,10)}},
+{act:'Act V · The Fall of Othrys',name:'The Throne Stair',th:{...LV[6].th,bg:0x2a2a34,hemi:[0x6a6a90,0x1a1010,.7],sun:[0xa0a8ff,1.2],sky:{e:8,a:300,t:20,r:5},amb:{c:[2,.6,.2],n:30,g:.8,life:3,size:.1,spd:.5}},
+async run(){const ob=mat(0x1c1a20,{m:.4,r:.6}),col=(x,z,w,top)=>block(x,(top-40)/2,z,w,top+40,w,ob);col(0,24,9,0);const L=[];
+ for(let i=1;i<=14;i++){const a=PI/2-i*.45,x=Math.cos(a)*20,z=Math.sin(a)*20;col(x,z,6.5,i*1.6);L.push([x,z,i*1.6])}col(0,0,14,24);anchor(-8,27,10);anchor(12,14,-6);
+ const G={guard:8},F=[];for(const i of[3,6,9,12]){const[x,z,y]=L[i];F.push(spawn(i==9?'brute':'grunt',x,z,y,0,G),spawn('archer',x+1.5,z+1.5,y,0,G))}
+ player(0,24);await say([['Zeus','The Throne Stair. Kronos’s Praetor guards the summit — the last door before the Titan King himself.'],['Zeus','Climb! We hold the base behind you.']]);
+ W.ht=6;W.tick=dt=>{if((W.ht-=dt)<=0&&W.enemies.filter(e=>!e.dead&&e.t=='harpy').length<3){W.ht=8;const a=rand(0,TAU);spawn('harpy',pl.pos.x+Math.cos(a)*26,pl.pos.z+Math.sin(a)*26,pl.pos.y+5)}};
+ obj('Climb the Throne Stair');await until(()=>pl.pos.y>23&&Math.hypot(pl.pos.x,pl.pos.z)<8);W.tick=null;
+ rift(0,-4,0xffc040,4);await wait(.7);const b=named(spawn('warden',0,0,24,1,{from:[0,-4]}),'THE PRAETOR OF OTHRYS');b.H.M.forEach(m=>m.color?.set(0x8a6a20));
+ await say([['Praetor','None pass to the King. Not god, not Giant — and not you.']]);obj('Defeat THE PRAETOR');await killAll([b]);
+ obj('Enter the rift');await portal(0,24,-4)}},
+{act:'Act V · The Fall of Othrys',name:'The Hourglass Gardens',th:{bg:0x2a2010,fog:.014,hemi:[0xffe0a0,0x302010,.8],sun:[0xffe0a0,1.6],sky:{e:25,a:220,t:6,r:2},env:.5,g1:0x3a4a20,g2:0x6a6a3a,R:40,wall:40,amb:{c:[2,1.7,.7],n:40,g:-.1,life:5,size:.1,spd:.3}},
+async run(){const gd=mat(0x8a6a2a,{m:.9,r:.35}),mb=mat(0xd8d0c4,{r:.45});for(let i=0;i<12;i++){const a=i/12*TAU;column(Math.cos(a)*26,Math.sin(a)*26,8,mb)}
+ for(let i=0;i<5;i++){const a=i/5*TAU,x=Math.cos(a)*14,z=Math.sin(a)*14;cyl(x,1.4,z,.9,2.8,gd,true,12);const h=add(mesh(new THREE.TorusGeometry(1.1,.08,8,32),glow(0xffc040,3),false),x,3.2,z);W.spin.push(h)}
+ player(0,20);await say([['','Kronos’s gardens, where every flower opens and dies a thousand times an hour.'],['Hades','His time-wards fall like rain here. Hold the garden until our army breaches the throne room.']]);
+ let T=60;W.zt=1;W.st=1;W.tick=dt=>{T-=dt;obj(`Hold the Hourglass Gardens — ${Math.ceil(Math.max(T,0))}s`);
+  if((W.zt-=dt)<=0){W.zt=1.6;for(let i=0;i<2;i++)hz({k:'circle',pos:new V3(pl.pos.x+rand(-7,7),0,pl.pos.z+rand(-7,7)),r:3,delay:1.2,dmg:18,col:0xffc040})}
+  if((W.st-=dt)<=0&&alive().length<8){W.st=3;const a=rand(0,TAU),p=[Math.cos(a)*22,Math.sin(a)*22];rift(p[0],p[1],0xffc040,2.5);for(let i=0;i<2;i++)spawn(pick(['grunt','archer','shade','brute']),p[0]*.7+rand(-2,2),p[1]*.7+rand(-2,2),undefined,0,{from:p})}};
+ await until(()=>T<=0);W.tick=null;obj('Finish the stragglers');await until(()=>!alive().length);
+ await say([['Hades','The gates of the throne room are open. Whatever happens in there — it ends today.']]);obj('Enter the rift');await portal(0,0,0)}});
+// story order: original chapters interleaved with the new ones; S.lvl is a position in this list
 async function riftDone(){const T=W.rift,dr=Math.round((40+15*T)*(1+.1*tr('greed')));S.dr+=dr;if(T>S.rift)S.rift=T;gainXP(100+40*T);save();banner('RIFT CLEARED',`Tier ${T} · +${dr} drachma`);await fade(1);showHub();fade(0)}
 function arena(c,rc){cyl(0,-1,0,24,2,mat(c,{r:.6,m:.3}),false,64);add(mesh(new THREE.TorusGeometry(20,.1,6,96).rotateX(PI/2),glow(rc,2.5),false),0,.05,0);
  for(let i=0;i<8;i++){const a=i/8*TAU;cyl(Math.cos(a)*29,4,Math.sin(a)*29,1.4,26,mat(c),false,12);
   const ch=mesh(new THREE.CylinderGeometry(.12,.12,1,6).rotateX(PI/2),glow(rc,1.5),false);add(ch,Math.cos(a)*15,10,Math.sin(a)*15);ch.lookAt(Math.cos(a)*29,16,Math.sin(a)*29);ch.scale.z=16}}
 
 // ================= flow =================
-function loadLevel(i){RUN++;W.idx=i;Sstart=JSON.stringify(S);resetWorld();const L=LV[i],t=L.th;applyTheme(t);base(t);
+function loadLevel(i){RUN++;W.idx=i;Sstart=JSON.stringify(S);resetWorld();const L=LV[i],t=L.th,k=i==10?24:ORD.indexOf(i),pk=S.post?1.35:1;
+ // the saga gets harder chapter by chapter: tougher, harder-hitting, quicker foes
+ if(k>=0)Object.assign(W,{hsc:(1.3+.1*k)*pk,dsc:(1.25+.06*k)*pk,cdk:Math.max(.62,.85-.008*k)});applyTheme(t);base(t);
  W.floor=t.floor??true;W.R=t.R;W.killY=t.killY??-20;Object.assign(pl,{hp:S.maxHp,st:100,sp:100,dead:false,atk:null,grap:null,dodge:0,barrier:0,fs:false,gcd:0,meter:0,parry:0,pcd:0,sight:0,scd:0});tether.visible=false;
  buildPlayer();document.body.classList.toggle('miasma',S.miasma);[ui.menu,ui.hub,ui.dead,ui.modal].forEach(e=>e.style.display='none');ui.hud.style.display='block';ui.toasts.innerHTML='';
  ui.card.innerHTML=`<small>${L.act.toUpperCase()}</small><h1>${L.name}</h1>`;ui.card.classList.remove('show');void ui.card.offsetWidth;ui.card.classList.add('show');
@@ -739,16 +878,16 @@ async function warp(){sfx('portal');const o=pl.pos.clone(),id=RUN;W.warp=1;shake
  await new Promise(r=>{const t0=performance.now(),f=()=>{if(id!==RUN)return r();const k=Math.min((performance.now()-t0)/1100,1);PH.g.position.set(o.x,o.y+k*k*2.5,o.z);PH.g.rotation.y+=.25*k;PH.g.scale.setScalar(Math.max(1-k*k,.01));
   camera.fov=60+k*k*45;camera.updateProjectionMatrix();if(Math.random()<.8)emit(PH.g.position,6,{c:[.8,1.4,3],spd:3,life:.6,size:.25});k<1?setTimeout(f,16):r()};f()});
  flash();PH.g.scale.setScalar(1);camera.fov=60;camera.updateProjectionMatrix();W.warp=0}
-async function complete(){await warp();if(W.rift)return riftDone();if(!S.post&&W.idx<9)S.lvl=W.idx+1;save();await fade(1);showHub();fade(0)}
+async function complete(){await warp();if(W.rift)return riftDone();{const k=ORD.indexOf(W.idx);if(!S.post&&k>=0&&k<ORD.length-1)S.lvl=Math.max(S.lvl,k+1)}save();await fade(1);showHub();fade(0)}
 function die(){sfx('death');pl.dead=true;mode='dead';document.exitPointerLock();ui.dead.style.display='flex';arm(ui.dead)}
 $('retry').onclick=()=>{S=JSON.parse(Sstart);loadLevel(W.idx)};
 function showHub(){RUN++;mode='hub';document.exitPointerLock();ui.hud.style.display='none';menuScene();ui.menu.style.display=ui.hub.style.display='none';renderHub()}
-function renderHub(){const cost=S.merchant?15:30,post=S.post,rUn=S.lvl>=4||post,wn=WEAP[S.weapon].st[0].n=='Pickaxe'?'Mining Pickaxe':{staff:'Aetheric Dodecahedron Staff',aegis:'Aegis Sektor',claws:'Stygian Claws'}[S.weapon];
+function renderHub(){const cost=S.merchant?15:30,post=S.post,rUn=S.lvl>=ORD.indexOf(4)||post,wn=WEAP[S.weapon].st[0].n=='Pickaxe'?'Mining Pickaxe':{staff:'Aetheric Dodecahedron Staff',aegis:'Aegis Sektor',claws:'Stygian Claws'}[S.weapon];
  const ready=TRIALS.some((t,i)=>!S.claim.includes(i)&&trialV(t[0])>=t[1]);
  const J=`<div><button data-a=buy>Buy Potion — ${cost} dr</button>${S.merchant?'<br><small>The Mortal Merchant you freed gives you a discount.</small>':''}</div>
- ${post?`<p style="margin:16px 0 6px;color:#c9a24a" class=cin>Replay with radiant skies · Chrono-Blink active</p><div class=grid>${LV.slice(0,10).map((l,i)=>`<button data-l=${i}>${i+1}. ${l.name}</button>`).join('')}</div>
+ ${post?`<p style="margin:16px 0 6px;color:#c9a24a" class=cin>Replay with radiant skies · Chrono-Blink active</p><div class=grid>${ORD.map((li,i)=>`<button data-l=${li}>${i+1}. ${LV[li].name}</button>`).join('')}</div>
  <div><button class=go data-l=10>⚔ The Memory Pool — Echoes of Othrys</button></div><div>Skin: ${['Standard','Radiant Gold','Constellation'].map((n,i)=>i<2||S.gaunt?`<button data-s=${i}>${S.skin==i?'▸ ':''}${n}</button>`:'').join('')}</div>`
- :`<div><button class=go data-l=${S.lvl}>Continue → ${LV[S.lvl].name}</button><br><small>Recommended level ${1+S.lvl*2}${S.plv<1+S.lvl*2?' — train in the Titan Rifts first':''}</small></div><p><small>🔒 The Memory Pool opens after you defeat Kronos (level 10 of 10).</small></p>`}
+ :`<div><button class=go data-l=${ORD[S.lvl]}>Continue → ${LV[ORD[S.lvl]].name}</button><br><small>Chapter ${S.lvl+1} of ${ORD.length} · recommended level ${1+Math.round(S.lvl*1.5)}${S.plv<1+Math.round(S.lvl*1.5)?' — train in the Titan Rifts first':''}</small></div><p><small>🔒 The Memory Pool opens after you defeat Kronos (chapter 20 of 20).</small></p>`}
  ${rUn?`<p style="margin:16px 0 6px;color:#ff9a70" class=cin>Titan Rifts — endless trials · best tier ${S.rift}</p><div><button class=go data-r=${S.rift+1}>⚔ Rift Tier ${S.rift+1}${(S.rift+1)%5?'':' · Champion'}</button>${S.rift?`<button data-r=${S.rift}>Replay Tier ${S.rift}</button>`:''}</div>`:'<p><small>Titan Rifts open after the Obsidian Crags.</small></p>'}`;
  const TP=`<p>Talent points: <b>${S.tp}</b> · earn one every level</p><div class=pnl>${TAL.map(([k,n,d])=>`<button data-tal=${k} class="${tr(k)>=5?'done':''}">${n} ${'◆'.repeat(tr(k))}${'◇'.repeat(5-tr(k))}<span>${d} per rank · ${tr(k)>=5?'Mastered':'costs '+(tr(k)+1)+' pt'}</span></button>`).join('')}</div>`;
  const FG=`<p>${S.dr} drachma · the Elder Giants work the anvils</p><div class=pnl><button data-f=wpn>Temper weapon · tier ${S.wpn}<span>${wn} · +8% attack · ${forgeC(S.wpn)} dr</span></button><button data-f=arm>Reinforce armour · tier ${S.arm}<span>+12 max HP · ${forgeC(S.arm)} dr</span></button></div>`;
@@ -773,6 +912,7 @@ $('cloud').onclick=async()=>{if(!API)return alert('Cloud saves need the online s
 // overlays fade in and ignore clicks for a moment so a held attack button can't pick something
 function arm(el){el.classList.remove('in');void el.offsetWidth;el.classList.add('in','arm');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('arm'),800)}
 const hex=c=>'#'+c.toString(16).padStart(6,'0');
+let crZ=0;addEventListener('wheel',e=>{if(mode=='create')crZ=clamp(crZ+Math.sign(e.deltaY)*-.25,0,1)},{passive:true});
 function creator(){mode='create';[ui.menu,ui.hub].forEach(e=>e.style.display='none');menuScene();buildPlayer();PH.g.position.set(9,0,6);ui.creator.style.display='flex';renderCreator()}
 function renderCreator(msg=''){const B=(k,v,lab,on,st='',cl='')=>`<button class="${cl} ${on?'on':''}" data-k=${k} data-v=${v} ${st}>${lab}</button>`;
  ui.creator.innerHTML=`<div class=pan><h2>Forge Your Mortal</h2><label>Name</label><input id=nm maxlength=16 value="${S.name}">
@@ -825,9 +965,9 @@ function frame(now){requestAnimationFrame(frame);let dt=clamp((now-last)/1000,0,
   p.needsUpdate=true;W.water.geometry.computeVertexNormals()}
  if(W.lava){LAVA.offset.x=W.time*.01;LAVA.offset.y=W.time*.006;W.lava.material.emissiveIntensity=2+Math.sin(W.time*1.7)*.3}
  updParticles(dt);
- if(mode=='create'){camera.position.set(8.2+Math.sin(W.time*.15)*.4,1.45,9.2);camera.lookAt(8.4,1.05,6);PH.g.rotation.y=Math.sin(W.time*.4)*.9;animH(PH,0,0,null,null)}
+ if(mode=='create'){const z=crZ;camera.position.set(lerp(8.2+Math.sin(W.time*.15)*.4,9,z),lerp(1.45,1.74,z),lerp(9.2,7.1,z));camera.lookAt(lerp(8.4,9,z),lerp(1.05,1.7,z),6);PH.g.rotation.y=Math.sin(W.time*.4)*.9*(1-z*.6);animH(PH,0,0,null,null)}
  else if(mode=='menu'||mode=='hub'){const a=W.time*.08;camera.position.set(Math.sin(a)*14,4.5,Math.cos(a)*14);camera.lookAt(0,3,0)}else updCam(dt);
- const sp=mode=='play'||mode=='dlg'||mode=='modal'?pl.pos:camera.position;fill.position.copy(camera.position).lerp(sp,.4);fill.position.y+=1.5;if(W.sunDir){sun.position.copy(sp).addScaledVector(W.sunDir,90);sun.target.position.copy(sp)}
+ const sp=mode=='play'||mode=='dlg'||mode=='modal'?pl.pos:camera.position;fill.position.copy(camera.position).lerp(sp,.4);fill.position.y+=1.5;if(W.sunDir){sun.position.copy(sp).addScaledVector(W.sunDir,90);sun.target.position.copy(sp)}rim.target.position.copy(sp);rim.position.copy(sp).sub(camera.position).setY(0).normalize().multiplyScalar(10).add(sp);rim.position.y+=5;
  if(mode=='play'&&(hudT-=dt)<=0){hudT=.05;hud()}if(!window.__nr)composer.render()}
 function hud(){ui.hp.style.width=Math.max(pl.hp,0)/S.maxHp*100+'%';ui.st.style.width=pl.st+'%';ui.sp.style.width=(S.spark?pl.sp:0)+'%';ui.sp.parentNode.style.opacity=S.miasma?.3:1;
  ui.mtr.style.width=pl.meter+'%';ui.mtr.classList.toggle('full',pl.meter>=100);ui.xp.style.width=S.xp/xpNeed()*100+'%';compass();
@@ -838,4 +978,4 @@ function hud(){ui.hp.style.width=Math.max(pl.hp,0)/S.maxHp*100+'%';ui.st.style.w
  const k=(key,n,on=true)=>`<div class=${on?'':'off'}>${n}<kbd>${key}</kbd></div>`;
  ui.keys.innerHTML=k('LMB','Light')+k('RMB','Heavy')+k('Q',S.dash?'Aquatic Dash':'Dodge')+(S.spark?k('F',S.miasma?'Spark (sealed)':'Spark Blast',!S.miasma&&pl.sp>=25):'')+
   (S.grapple?k('G','Grapple',!!pl.gt):'')+(WEAP[S.weapon].st.length>1?k('R','Stance'):'')+k('C','Parry',pl.pcd<=0)+k('T','Spark Sight',pl.scd<=0)+k('X',(S.align=='athena'?'Aegis Barrier':S.align=='ares'?'Plasma Eruption':'Primordial Surge')+(pl.meter<100?` ${pl.meter|0}%`:' READY'),pl.meter>=100)+k('H',`Potion ×${S.potions}`,S.potions>0)}
-menuScene();$('cont').style.display=S.lvl>0||S.post?'':'none';cloudLoad();requestAnimationFrame(frame);window.dbg={get W(){return W},pl,get S(){return S},loadLevel,LV,kill,get mode(){return mode},nolock(){lockT=1e15},frame,next:()=>nextLine(1),rift(t){riftT=t},get PH(){return PH},cam};
+menuScene();$('cont').style.display=S.lvl>0||S.post?'':'none';cloudLoad();requestAnimationFrame(frame);window.dbg={get W(){return W},pl,get S(){return S},loadLevel,LV,kill,get mode(){return mode},nolock(){lockT=1e15},frame,next:()=>nextLine(1),rift(t){riftT=t},get PH(){return PH},cam,set crZ(v){crZ=v}};
